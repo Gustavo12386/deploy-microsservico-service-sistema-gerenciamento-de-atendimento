@@ -14,6 +14,12 @@ pipeline {
             }
         }
 
+        stage('Prepare Maven Wrapper') {
+            steps {
+                sh 'chmod +x mvnw'
+            }
+        }
+
         stage('Build') {
             steps {
                 sh './mvnw clean package -DskipTests'
@@ -43,7 +49,7 @@ pipeline {
         }
 
         stage('Deploy') {
-            when {
+             when {
                 expression {                    
                     currentBuild.result == null || currentBuild.result == 'SUCCESS'
                 }
