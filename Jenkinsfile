@@ -16,6 +16,16 @@ pipeline {
             }
         }
 
+        stage('Check Docker') {
+            steps {
+                echo "Verificando versão do Docker e Docker Compose..."
+                sh 'docker --version'
+                sh 'docker-compose --version || echo "docker-compose não encontrado"'
+                // se estiver usando Compose V2:
+                sh 'docker compose version || echo "docker compose não encontrado"'
+            }
+        }
+
         stage('Start Services') {
             steps {
                sh 'docker-compose -f infra/docker-compose.yml up -d'
