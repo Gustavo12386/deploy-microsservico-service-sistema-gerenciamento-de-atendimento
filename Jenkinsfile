@@ -5,6 +5,7 @@ pipeline {
         AWS_DEFAULT_REGION = "us-east-1"
         LAMBDA_NAME = "microsservico-atentdimento"
         JAR_FILE = "target/service-0.0.1-SNAPSHOT-aws.jar"
+        SONARQUBE = "MeuSonarQube" 
     }
 
     stages {
@@ -14,19 +15,15 @@ pipeline {
             }
         }
 
-        stage('Start Database') {
+        stage('Start Services') {
             steps {
-                sh '''
-                  docker-compose -f infra/docker-compose.yml up -d
-                  echo "⏳ Aguardando PostgreSQL iniciar..."
-                  sleep 15
-                '''
+               sh 'docker-compose -f infra/docker-compose.yml up -d'
             }
         }
 
         stage('Build') {
             steps {
-                sh './mvnw clean package -DskipTests'
+               sh './mvnw clean package -DskipTests'
             }
         }
 
@@ -44,7 +41,7 @@ pipeline {
             }
         }
 
-        stage("Quality Gate") {
+        stage('Quality Gate') {
             steps {
                 timeout(time: 1, unit: 'HOURS') { 
                     waitForQualityGate abortPipeline: true
@@ -68,13 +65,15 @@ pipeline {
                 }
             }
         }
+
+        stage('Stop Services') {
+            steps {                
+                sh 'docker-compose -f infra/docker-compose.yml down'
+            }
+        }
     }
 
     post {
-        always {
-            echo "🧹 Limpando containers..."
-            sh 'docker-compose -f infra/docker-compose.yml down || true'
-        }
         success {
             echo "🚀 Deploy realizado com sucesso!"
         }
