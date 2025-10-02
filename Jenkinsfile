@@ -20,8 +20,7 @@ pipeline {
             steps {
                 echo "Verificando versão do Docker e Docker Compose..."
                 sh 'docker --version'
-                sh 'docker-compose --version || echo "docker-compose não encontrado"'
-                // se estiver usando Compose V2:
+                sh 'docker-compose --version || echo "docker-compose não encontrado"'                
                 sh 'docker compose version || echo "docker compose não encontrado"'
             }
         }
@@ -85,7 +84,7 @@ pipeline {
 
         stage('Stop Infra') {
             steps {
-                echo "🛑 Finalizando serviços de apoio"
+                echo " Finalizando serviços de apoio"
                 sh 'docker compose -f infra/docker-compose.yml down || true'
             }
         }
