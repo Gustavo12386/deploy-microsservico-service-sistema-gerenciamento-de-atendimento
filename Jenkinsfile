@@ -16,20 +16,20 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                sh './mvnw clean package -DskipTests'
             }
         }
 
         stage('Test') {
             steps {
-                sh 'mvn test'
+                sh './mvnw test'
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv("${SONARQUBE}") {
-                    sh "mvn sonar:sonar -Dsonar.projectKey=meu-projeto -Dsonar.host.url=http://localhost:9000 -Dsonar.login=${env.SONAR_AUTH_TOKEN}"
+                    sh "./mvnw sonar:sonar -Dsonar.projectKey=meu-projeto -Dsonar.host.url=http://localhost:9000 -Dsonar.login=${env.SONAR_AUTH_TOKEN}"
                 }
             }
         }
@@ -43,7 +43,7 @@ pipeline {
         }
 
         stage('Deploy') {
-             when {
+            when {
                 expression {                    
                     currentBuild.result == null || currentBuild.result == 'SUCCESS'
                 }
