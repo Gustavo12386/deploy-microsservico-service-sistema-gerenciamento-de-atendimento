@@ -28,7 +28,7 @@ pipeline {
 
         stage('Start Services') {
             steps {
-               sh 'docker-compose -f infra/docker-compose.yml up -d'
+               sh 'docker compose -f infra/docker-compose.yml up -d'
             }
         }
 
@@ -86,7 +86,7 @@ pipeline {
         stage('Stop Infra') {
             steps {
                 echo "🛑 Finalizando serviços de apoio"
-                sh 'docker-compose -f infra/docker-compose.yml down || true'
+                sh 'docker compose -f infra/docker-compose.yml down || true'
             }
         }
     }
