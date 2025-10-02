@@ -5,7 +5,8 @@ pipeline {
         AWS_DEFAULT_REGION = "us-east-1"
         LAMBDA_NAME = "microsservico-atentdimento"
         JAR_FILE = "target/service-0.0.1-SNAPSHOT-aws.jar"
-        SONARQUBE = "MeuSonarQube" 
+        SONARQUBE = "SonarQube" 
+        PATH = "/usr/sbin:${env.PATH}"
     }
 
     stages {
@@ -72,9 +73,10 @@ pipeline {
             }
         }
 
-        stage('Stop Services') {
-            steps {                
-                sh 'docker compose -f infra/docker-compose.yml down'
+        stage('Stop Infra') {
+            steps {
+                echo "🛑 Finalizando serviços de apoio"
+                sh 'docker compose -f infra/docker-compose.yml down || true'
             }
         }
     }
