@@ -1,8 +1,7 @@
 services:
   postgres:
     image: postgres:17.5    
-    environment:
-      #HOST: postgres
+    environment:      
       POSTGRES_USER: calderarogustavo
       POSTGRES_PASSWORD: Gusang_20011
       POSTGRES_DB: postgres
@@ -50,10 +49,23 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9090
     networks:
       - local-network    
+  jenkins:
+    image: jenkins/jenkins:lts
+    user: root
+    ports:
+      - 8080:8080
+      - 50000:50000
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock  
+    networks:
+      - local-network
+
 volumes:
   postgres-data:
   pgadmin-data:
   kafka-data:
+  jenkins-data:
 networks:
   local-network:
     driver: bridge
