@@ -17,7 +17,13 @@ pipeline {
 
         stage('Start Services') {
             steps {
-               sh 'docker-compose -f infra/docker-compose.yml up -d'
+               sh 'docker compose -f infra/docker-compose.yml up -d'
+            }
+        }
+
+         stage('Prepare Maven Wrapper') {
+            steps {
+                sh 'chmod +x mvnw'
             }
         }
 
@@ -68,7 +74,7 @@ pipeline {
 
         stage('Stop Services') {
             steps {                
-                sh 'docker-compose -f infra/docker-compose.yml down'
+                sh 'docker compose -f infra/docker-compose.yml down'
             }
         }
     }
