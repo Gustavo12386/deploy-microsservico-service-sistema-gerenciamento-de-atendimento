@@ -1,26 +1,18 @@
-# Use a imagem oficial do Jenkins LTS
 FROM jenkins/jenkins:lts
 
-# Trocar para root para instalar pacotes
 USER root
 
-# Atualizar pacotes e instalar Docker e Docker Compose
-RUN apt-get update && \
-    apt-get install -y \
-        docker.io \
-        docker-compose \
-        git \
-        curl \
-        vim \
-        unzip \
-        sudo \
-    && rm -rf /var/lib/apt/lists/*
+# Instala Docker CLI (se ainda não estiver)
+RUN apt-get update && apt-get install -y docker.io curl
 
-# Permitir que o Jenkins use Docker sem sudo
-RUN usermod -aG docker jenkins
+# Instala Docker Compose V2
+RUN DOCKER_CONFIG=/var/jenkins_home/.docker \
+    && mkdir -p $DOCKER_CONFIG/cli-plugins \
+    && curl -SL https://github.com/docker/compose/releases/download/v2.24.1/docker-compose-linux-x86_64 -o $DOCKER_CONFIG/cli-plugins/docker-compose \
+    && chmod +x $DOCKER_CONFIG/cli-plugins/docker-compose
 
-# Voltar para o usuário Jenkins
 USER jenkins
+
 
 # Expor porta padrão do Jenkins
 EXPOSE 8080 50000
