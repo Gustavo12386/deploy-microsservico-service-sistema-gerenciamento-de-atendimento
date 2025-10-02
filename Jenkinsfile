@@ -14,9 +14,13 @@ pipeline {
             }
         }
 
-        stage('Prepare Maven Wrapper') {
+        stage('Start Database') {
             steps {
-                sh 'chmod +x mvnw'
+                sh '''
+                  docker-compose -f infra/docker-compose.yml up -d
+                  echo "⏳ Aguardando PostgreSQL iniciar..."
+                  sleep 15
+                '''
             }
         }
 
@@ -49,7 +53,7 @@ pipeline {
         }
 
         stage('Deploy') {
-             when {
+            when {
                 expression {                    
                     currentBuild.result == null || currentBuild.result == 'SUCCESS'
                 }
@@ -67,6 +71,10 @@ pipeline {
     }
 
     post {
+        always {
+            echo "🧹 Limpando containers..."
+            sh 'docker-compose -f infra/docker-compose.yml down || true'
+        }
         success {
             echo "🚀 Deploy realizado com sucesso!"
         }
