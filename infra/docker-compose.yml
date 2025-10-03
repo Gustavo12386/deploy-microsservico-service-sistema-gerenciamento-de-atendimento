@@ -49,22 +49,18 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9090
     networks:
       - local-network    
-  jenkins:
-    jenkins:
-    build: .
-    container_name: jenkins
+  sonar:
+    image: sonarqube:latest
+    container_name: sonar
     ports:
-      - "8080:8080"
-      - "50000:50000"
-    volumes:
-      - jenkins_home:/var/jenkins_home
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "9000:9000"
+    environment:
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
 
 volumes:
   postgres-data:
   pgadmin-data:
-  kafka-data:
-  jenkins_home:
+  kafka-data:  
 networks:
   local-network:
     driver: bridge
