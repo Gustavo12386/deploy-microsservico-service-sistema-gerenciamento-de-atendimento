@@ -14,14 +14,7 @@ pipeline {
             steps {
                 git branch: 'master', url: 'https://github.com/Gustavo12386/deploy-microsservico-service-sistema-gerenciamento-de-atendimento'
             }
-        }   
-
-        stage('Check Docker') {
-            steps {
-                echo "🔍 Verificando versão do Docker e Docker Compose..."                
-                sh 'docker compose version'
-            }
-        }     
+        }          
 
         stage('Start Services') {
             steps {
