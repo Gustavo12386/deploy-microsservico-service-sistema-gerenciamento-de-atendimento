@@ -6,7 +6,7 @@ spring:
     name: service
 
   datasource:
-    url: jdbc:postgresql://postgres:5432/atendimentodb
+    url: jdbc:postgresql://localhost:5432/atendimentodb
     username: calderarogustavo
     password: Gusang_20011
 
