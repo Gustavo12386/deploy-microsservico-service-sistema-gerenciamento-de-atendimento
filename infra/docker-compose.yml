@@ -36,17 +36,11 @@ services:
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9090
     networks:
       - local-network    
-  sonar:
-    image: sonarqube:latest
-    container_name: sonar
-    ports:
-      - "9000:9000"
-    environment:
-      SONAR_ES_BOOTSTRAP_CHECKS_DISABLE: "true"
-
+  
 volumes:
   postgres-data:  
   kafka-data:  
 networks:
   local-network:
     driver: bridge
+
