@@ -125,6 +125,7 @@
             <artifactId>maven-compiler-plugin</artifactId>
             <version>3.11.0</version>
             <configuration>
+			    <layers enabled="true"/>
                 <annotationProcessorPaths>
                     <path>
                         <groupId>org.projectlombok</groupId>
