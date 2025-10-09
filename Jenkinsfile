@@ -4,7 +4,7 @@ pipeline {
     environment {
         AWS_REGION = 'us-east-1'
         S3_BUCKET  = 'lambda-deploys-gustavo'
-        LAMBDA_FUNCTION = 'microservice-atentdimento'
+        LAMBDA_FUNCTION = 'microsservico-atentdimento'
         JAR_FILE = 'target/service-0.0.1-SNAPSHOT.jar'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
