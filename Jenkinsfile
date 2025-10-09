@@ -60,7 +60,24 @@ pipeline {
                 }
             }
         }
+       
+        stage('Ensure S3 Bucket Exists') {
+           steps {
+              withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    script {
+                        echo "🔍 Verificando se o bucket ${S3_BUCKET} existe..."
+                        def result = sh(script: "aws s3api head-bucket --bucket ${S3_BUCKET} 2>&1 || true", returnStdout: true).trim()
 
+                        if (result.contains("Not Found") || result.contains("404") || result.contains("NoSuchBucket")) {
+                            echo "⚠️ Bucket ${S3_BUCKET} não encontrado. Criando..."
+                            sh "aws s3 mb s3://${S3_BUCKET} --region ${AWS_REGION}"
+                            echo "✅ Bucket criado com sucesso!"
+                        } else {
+                            echo "✅ Bucket ${S3_BUCKET} já existe!"
+                        }
+               }
+           } 
+        }
 
         stage('Upload to S3') {
             steps {
@@ -68,12 +85,9 @@ pipeline {
                     $class: 'AmazonWebServicesCredentialsBinding', 
                     credentialsId: 'aws-credentials'
                 ]]){
-                     sh '''
-                        aws lambda update-function-code \
-                            --function-name ${LAMBDA_FUNCTION} \
-                            --s3-bucket ${S3_BUCKET} \
-                            --s3-key service-latest.jar \
-                            --region ${AWS_REGION}
+                      sh '''
+                        echo "🚀 Enviando arquivo .jar para o S3..."
+                        aws s3 cp target/service-0.0.1-SNAPSHOT.jar s3://${S3_BUCKET}/service-latest.jar --region ${AWS_REGION}
                     '''
                 }
             }
