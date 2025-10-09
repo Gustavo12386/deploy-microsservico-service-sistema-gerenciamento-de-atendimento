@@ -16,5 +16,6 @@ C:\Users\gucal\Downloads\service\src\main\java\com\service\infrastructure\http\c
 C:\Users\gucal\Downloads\service\src\main\java\com\service\infrastructure\http\client\ServiceModelRequest.java
 C:\Users\gucal\Downloads\service\src\main\java\com\service\ServiceSystemApplication.java
 C:\Users\gucal\Downloads\service\src\main\java\com\service\infrastructure\swagger\SpringDocOpenApiConfig.java
+C:\Users\gucal\Downloads\service\src\main\java\com\service\config\handler\LambdaHandler.java
 C:\Users\gucal\Downloads\service\src\main\java\com\service\api\model\ServiceMessage.java
 C:\Users\gucal\Downloads\service\src\main\java\com\service\infrastructure\resilience4j\Resilence4jRetryEventConsumer.java
