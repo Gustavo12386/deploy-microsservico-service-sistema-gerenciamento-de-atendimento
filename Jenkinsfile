@@ -4,7 +4,7 @@ pipeline {
     environment {
         AWS_REGION = 'us-east-1'
         S3_BUCKET  = 'lambda-deploys-gustavo'
-        LAMBDA_FUNCTION = 'microsservico-atentdimento'
+        LAMBDA_FUNCTION = 'microsservico-atendimento'
         JAR_FILE = 'target/service-0.0.1-SNAPSHOT.jar'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
@@ -103,10 +103,28 @@ pipeline {
                                 --function-name ${LAMBDA_FUNCTION} \
                                 --runtime java17 \
                                 --role arn:aws:iam::381492003133:role/lambda-deploy-policy \
-                                --handler com.seu.pacote.MainHandler::handleRequest \
+                                --handler com.service.config.handler.LambdaHandler::handleRequest \
                                 --code S3Bucket=${S3_BUCKET},S3Key=service-latest.jar \
                                 --region ${AWS_REGION}
                         fi
+                    '''
+                }
+            }
+        }
+
+         stage('Create Function URL (with CORS)') {
+            steps {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    sh '''
+                    echo "🌐 Configurando Function URL com CORS..."
+                    aws lambda create-function-url-config \
+                        --function-name ${LAMBDA_FUNCTION} \
+                        --auth-type NONE \
+                        --cors "AllowOrigins=['*'],AllowMethods=['GET','POST','PUT','DELETE','OPTIONS'],AllowHeaders=['*']" \
+                        --region ${AWS_REGION} || echo "🔄 Function URL já existe."
+
+                    echo "✅ Endpoint da Lambda:"
+                    aws lambda get-function-url-config --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION}
                     '''
                 }
             }

@@ -6,6 +6,7 @@ com\service\domain\service\ServiceRegistration.class
 com\service\infrastructure\http\client\ServiceModelRequest.class
 com\service\infrastructure\swagger\SpringDocOpenApiConfig.class
 com\service\api\model\ServiceMessage.class
+com\service\config\handler\LambdaHandler.class
 com\service\domain\repository\ServiceRepository.class
 com\service\api\model\ServiceInput.class
 com\service\infrastructure\http\client\NotificationAPIClientConfig.class
