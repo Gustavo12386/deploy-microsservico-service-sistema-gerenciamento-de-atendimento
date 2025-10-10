@@ -102,7 +102,7 @@ pipeline {
                             aws lambda create-function \
                                 --function-name ${LAMBDA_FUNCTION} \
                                 --runtime java17 \
-                                --arn:aws:iam::381492003133:role/lambda-deploy-role \
+                                --role arn:aws:iam::381492003133:role/lambda-deploy-role \
                                 --handler com.service.config.handler.LambdaHandler::handleRequest \
                                 --code S3Bucket=${S3_BUCKET},S3Key=service-latest.jar \
                                 --region ${AWS_REGION}
