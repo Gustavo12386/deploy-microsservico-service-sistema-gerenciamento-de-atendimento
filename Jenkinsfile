@@ -96,31 +96,34 @@ pipeline {
         stage('Deploy Lambda') {
             steps {
                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-                    sh '''
-                    if aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
-                        aws lambda update-function-configuration \
-                        --function-name ${LAMBDA_FUNCTION} \
-                        --runtime java17 \
-                        --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                        --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
-                        --region ${AWS_REGION}
+                   sh '''
+                    echo "🚀 Verificando e implantando função Lambda..."
 
-                    aws lambda update-function-code \
-                      --function-name ${LAMBDA_FUNCTION} \
-                      --s3-bucket ${S3_BUCKET} \
-                      --s3-key service-latest.jar \
-                    --region ${AWS_REGION}
-                    else if ! aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
-                            echo "Lambda não existe, criando..."
-                            aws lambda create-function \
-                                --function-name ${LAMBDA_FUNCTION} \
-                                --runtime java17 \
-                                --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                                --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
-                                --code S3Bucket=${S3_BUCKET},S3Key=service-latest.jar \
-                                --region ${AWS_REGION}
-                        fi
-                    '''
+                    if aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
+                        echo "🔄 Atualizando função existente..."
+                        aws lambda update-function-configuration \
+                            --function-name ${LAMBDA_FUNCTION} \
+                            --runtime java17 \
+                            --role arn:aws:iam::381492003133:role/lambda-deploy-role \
+                            --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
+                            --region ${AWS_REGION}
+
+                        aws lambda update-function-code \
+                            --function-name ${LAMBDA_FUNCTION} \
+                            --s3-bucket ${S3_BUCKET} \
+                            --s3-key service-latest.jar \
+                            --region ${AWS_REGION}
+                    else
+                        echo "🆕 Criando nova função Lambda..."
+                        aws lambda create-function \
+                            --function-name ${LAMBDA_FUNCTION} \
+                            --runtime java17 \
+                            --role arn:aws:iam::381492003133:role/lambda-deploy-role \
+                            --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
+                            --code S3Bucket=${S3_BUCKET},S3Key=service-latest.jar \
+                            --region ${AWS_REGION}
+                    fi
+                '''
                 }
             }
         }
