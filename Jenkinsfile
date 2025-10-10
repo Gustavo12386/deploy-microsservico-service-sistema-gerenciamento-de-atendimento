@@ -117,14 +117,19 @@ pipeline {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     sh '''
                     echo "🌐 Configurando Function URL com CORS..."
+
+                    cat > cors-config.json <<EOF
+                    {
+                        "AllowOrigins": ["*"],
+                        "AllowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                        "AllowHeaders": ["*"]
+                    }
+                    EOF
+
                     aws lambda create-function-url-config \
                         --function-name ${LAMBDA_FUNCTION} \
                         --auth-type NONE \
-                        --cors '{
-                            "AllowOrigins": ["*"],
-                            "AllowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                            "AllowHeaders": ["*"]
-                        }' \
+                        --cors file://cors-config.json \
                         --region ${AWS_REGION} || echo "🔄 Function URL já existe."
 
                     echo "✅ Endpoint da Lambda:"
