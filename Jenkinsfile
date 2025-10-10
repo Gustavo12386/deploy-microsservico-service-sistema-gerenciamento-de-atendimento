@@ -120,7 +120,11 @@ pipeline {
                     aws lambda create-function-url-config \
                         --function-name ${LAMBDA_FUNCTION} \
                         --auth-type NONE \
-                        --cors "AllowOrigins=['*'],AllowMethods=['GET','POST','PUT','DELETE','OPTIONS'],AllowHeaders=['*']" \
+                        --cors '{
+                            "AllowOrigins": ["*"],
+                            "AllowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+                            "AllowHeaders": ["*"]
+                        }' \
                         --region ${AWS_REGION} || echo "🔄 Function URL já existe."
 
                     echo "✅ Endpoint da Lambda:"
