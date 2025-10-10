@@ -103,7 +103,7 @@ pipeline {
                                 --function-name ${LAMBDA_FUNCTION} \
                                 --runtime java17 \
                                 --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                                --handler com.service.config.handler.LambdaHandler::handleRequest \
+                                --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
                                 --code S3Bucket=${S3_BUCKET},S3Key=service-latest.jar \
                                 --region ${AWS_REGION}
                         fi
