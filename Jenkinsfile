@@ -97,7 +97,20 @@ pipeline {
             steps {
                    withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
                     sh '''
-                        if ! aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
+                    if aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
+                        aws lambda update-function-configuration \
+                        --function-name ${LAMBDA_FUNCTION} \
+                        --runtime java17 \
+                        --role arn:aws:iam::381492003133:role/lambda-deploy-role \
+                        --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
+                        --region ${AWS_REGION}
+
+                    aws lambda update-function-code \
+                      --function-name ${LAMBDA_FUNCTION} \
+                      --s3-bucket ${S3_BUCKET} \
+                      --s3-key service-latest.jar \
+                    --region ${AWS_REGION}
+                    else if ! aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
                             echo "Lambda não existe, criando..."
                             aws lambda create-function \
                                 --function-name ${LAMBDA_FUNCTION} \
