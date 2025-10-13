@@ -1,5 +1,7 @@
 HELP.md
-
+# Diretórios de build
+target/
+build/
 ### STS ###
 .apt_generated
 .classpath
