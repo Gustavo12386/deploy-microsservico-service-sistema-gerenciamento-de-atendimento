@@ -6,6 +6,7 @@ pipeline {
         ECR_REPO   = 'microsservico-atendimento'
         AWS_ACCOUNT_ID = '381492003133'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
+        PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
 
     stages {
@@ -20,6 +21,27 @@ pipeline {
                 script {
                     sh 'docker build -t ${ECR_REPO}:latest .'
                 }
+            }
+        }
+
+        stage('Install AWS CLI') {
+            steps {
+                echo ' Verificando se o AWS CLI está instalado...'
+                sh '''
+                if ! command -v aws &> /dev/null
+                then
+                    echo " Instalando AWS CLI localmente ..."
+                    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                    unzip -o -q awscliv2.zip
+                    ./aws/install --update -i /var/lib/jenkins/aws-cli -b /var/lib/jenkins/.local/bin
+                else
+                    echo " AWS CLI já está instalado."
+                fi
+
+                echo " Versão atual do AWS CLI:"
+                export PATH=/var/lib/jenkins/.local/bin:$PATH
+                aws --version
+                '''
             }
         }
 
