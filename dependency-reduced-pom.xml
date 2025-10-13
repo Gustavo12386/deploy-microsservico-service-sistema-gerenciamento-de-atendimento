@@ -37,6 +37,13 @@
       <plugin>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-maven-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>repackage</goal>
+            </goals>
+          </execution>
+        </executions>
         <configuration>
           <layered>true</layered>
           <excludes>
@@ -49,6 +56,52 @@
       </plugin>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
+        <version>3.5.0</version>
+        <executions>
+          <execution>
+            <id>shade-jar-with-dependencies</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <createDependencyReducedPom>false</createDependencyReducedPom>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+              <artifactSet>
+                <excludes>
+                  <exclude>org.apache.tomcat.embed:*</exclude>
+                  <exclude>org.hibernate:*</exclude>
+                  <exclude>org.springframework.boot:spring-boot-starter-web</exclude>
+                  <exclude>spring-boot-starter-test</exclude>
+                  <exclude>junit:junit</exclude>
+                </excludes>
+              </artifactSet>
+              <transformers>
+                <transformer>
+                  <resource>META-INF/spring.handlers</resource>
+                </transformer>
+                <transformer>
+                  <resource>META-INF/spring.schemas</resource>
+                </transformer>
+                <transformer>
+                  <resource>META-INF/spring.factories</resource>
+                </transformer>
+                <transformer>
+                  <mainClass>com.service.config.handler.LambdaHandler</mainClass>
+                </transformer>
+              </transformers>
+            </configuration>
+          </execution>
+        </executions>
       </plugin>
     </plugins>
   </build>

@@ -1,4 +1,5 @@
 HELP.md
+dependency-reduced-pom.xml
 # Diretórios de build
 target/
 build/

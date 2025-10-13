@@ -3,10 +3,9 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-east-1'
-        S3_BUCKET  = 'lambda-deploys-gustavo'
+        ECR_REPO   = 'microsservico-atendimento'
+        AWS_ACCOUNT_ID = '381492003133'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
-        JAR_FILE = 'target/service-0.0.1-SNAPSHOT-jar-with-dependencies.jar'
-        PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
 
     stages {
@@ -14,138 +13,76 @@ pipeline {
             steps {
                 git branch: 'master', url: 'https://github.com/Gustavo12386/deploy-microsservico-service-sistema-gerenciamento-de-atendimento'
             }
-        } 
-
-        stage('Prepare Maven Wrapper') {
-            steps {                
-                sh 'chmod +x mvnw'
-            }
         }
 
-        stage('Build') {
+        stage('Build Docker Image') {
             steps {
-                echo '🔨 Compilando o projeto com Maven...'
-                sh './mvnw clean package -DskipTests'
-            }
-        }       
-
-       stage('Gerar pacote ZIP leve') {
-            steps {
-                sh '''
-                    mkdir -p build-lambda
-                    cp ${JAR_FILE} build-lambda/
-                    cd build-lambda
-                    zip -r ../lambda.zip .
-                '''
-            }
-        }
-
-        stage('Install AWS CLI') {
-            steps {
-                echo ' Verificando se o AWS CLI está instalado...'
-                sh '''
-                if ! command -v aws &> /dev/null
-                then
-                    echo " Instalando AWS CLI localmente ..."
-                    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-                    unzip -o -q awscliv2.zip
-                    ./aws/install --update -i /var/lib/jenkins/aws-cli -b /var/lib/jenkins/.local/bin
-                else
-                    echo " AWS CLI já está instalado."
-                fi
-
-                echo " Versão atual do AWS CLI:"
-                export PATH=/var/lib/jenkins/.local/bin:$PATH
-                aws --version
-                '''
-            }
-        }
-
-        stage('Check AWS Account') {
-            steps {
-                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-                    sh '''
-                        echo "🔍 Verificando conta AWS associada..."
-                        aws sts get-caller-identity
-                    '''
-                }
-            }
-        }
-       
-         stage('Ensure S3 Bucket Exists') {
-            steps {
-                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-                   script{
-                      echo "🔍 Verificando se o bucket ${S3_BUCKET} existe..."
-                      def result = sh(script: "aws s3api head-bucket --bucket ${S3_BUCKET} 2>&1 || true", returnStdout: true).trim()
-                      if (result.contains("Not Found") || result.contains("404") || result.contains("NoSuchBucket")) {
-                            echo "⚠️ Bucket ${S3_BUCKET} não encontrado. Criando..."
-                            sh "aws s3 mb s3://${S3_BUCKET} --region ${AWS_REGION}"
-                            echo "✅ Bucket criado com sucesso!"
-                        } else {
-                            echo "✅ Bucket ${S3_BUCKET} já existe!"
-                        }
-                   } 
+                script {
+                    sh 'docker build -t ${ECR_REPO}:latest .'
                 }
             }
         }
 
-        stage('Upload to S3') {
+        stage('Login to ECR') {
             steps {
-                  withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding', 
-                    credentialsId: 'aws-credentials'
-                ]]){
-                    sh '''
-                        echo "🚀 Enviando arquivo .jar para o S3..."
-                        aws s3 cp target/service-0.0.1-SNAPSHOT-jar-with-dependencies.jar s3://${S3_BUCKET}/service-latest.jar --region ${AWS_REGION}
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    script {
+                        sh '''
+                        aws ecr describe-repositories --repository-names ${ECR_REPO} || \
+                        aws ecr create-repository --repository-name ${ECR_REPO}
 
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Push Image to ECR') {
+            steps {
+                script {
+                    sh '''
+                    docker tag ${ECR_REPO}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
                     '''
                 }
             }
         }
 
-        stage('Deploy Lambda') {
+        stage('Deploy Lambda Image') {
             steps {
-                   withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: 'aws-credentials']]) {
-                   sh '''
-                    echo "🚀 Verificando e implantando função Lambda..."
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    script {
+                        sh '''
+                        IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
 
-                    if aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
-                        echo "🔄 Atualizando função existente..."
-                        aws lambda update-function-configuration \
-                            --function-name ${LAMBDA_FUNCTION} \
-                            --runtime java17 \
-                            --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                            --handler com.service.config.handler.LambdaHandler \
-                            --region ${AWS_REGION}
-
-                        aws lambda update-function-code \
-                            --function-name ${LAMBDA_FUNCTION} \
-                            --s3-bucket ${S3_BUCKET} \
-                            --s3-key service-latest.jar \
-                            --region ${AWS_REGION}
-                    else
-                        echo "🆕 Criando nova função Lambda..."
-                        aws lambda create-function \
-                            --function-name ${LAMBDA_FUNCTION} \
-                            --runtime java17 \
-                            --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                            --handler com.service.config.handler.LambdaHandler \
-                            --code S3Bucket=${S3_BUCKET},S3Key=service-latest.jar \
-                            --region ${AWS_REGION}
-                    fi
-                '''
+                        if aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
+                            echo "🔄 Atualizando função existente..."
+                            aws lambda update-function-code \
+                                --function-name ${LAMBDA_FUNCTION} \
+                                --image-uri $IMAGE_URI \
+                                --region ${AWS_REGION}
+                        else
+                            echo "🆕 Criando nova função Lambda com imagem..."
+                            aws lambda create-function \
+                                --function-name ${LAMBDA_FUNCTION} \
+                                --package-type Image \
+                                --code ImageUri=$IMAGE_URI \
+                                --role arn:aws:iam::${AWS_ACCOUNT_ID}:role/lambda-deploy-role \
+                                --region ${AWS_REGION}
+                        fi
+                        '''
+                    }
                 }
             }
         }
 
-         stage('Create Function URL (with CORS)') {
+        stage('Create Function URL (with CORS)') {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     sh '''
                     echo "🌐 Configurando Function URL com CORS..."
-
                     cat > cors-config.json <<EOF
                     {
                         "AllowOrigins": ["*"],
@@ -160,7 +97,6 @@ pipeline {
                         --cors file://cors-config.json \
                         --region ${AWS_REGION} || echo "🔄 Function URL já existe."
 
-                    echo "✅ Endpoint da Lambda:"
                     aws lambda get-function-url-config --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION}
                     '''
                 }
@@ -170,10 +106,10 @@ pipeline {
 
     post {
         success {
-            echo '✅ Deploy realizado com sucesso!'
+            echo '✅ Deploy via container concluído com sucesso!'
         }
         failure {
-            echo '❌ O deploy falhou!'
+            echo '❌ Falha no deploy!'
         }
     }
 }
