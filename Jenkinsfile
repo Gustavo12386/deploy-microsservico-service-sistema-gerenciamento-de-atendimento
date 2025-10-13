@@ -29,16 +29,16 @@ pipeline {
             }
         }       
 
-       stage('Gerar pacote ZIP leve') {
-            steps {
-                sh '''
-                    mkdir -p build-lambda
-                    cp ${JAR_FILE} build-lambda/
-                    cd build-lambda
-                    zip -r ../lambda.zip .
-                '''
-            }
-        }
+      // stage('Gerar pacote ZIP leve') {
+      //      steps {
+      //          sh '''
+      //              mkdir -p build-lambda
+      //              cp ${JAR_FILE} build-lambda/
+      //              cd build-lambda
+      //              zip -r ../lambda.zip .
+      //          '''
+      //      }
+      //  }
 
         stage('Install AWS CLI') {
             steps {
