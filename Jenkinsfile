@@ -29,7 +29,18 @@ pipeline {
             }
         }
 
-           stage('Install AWS CLI') {
+        stage('Gerar pacote leve (ZIP)') {
+            steps {
+                   sh '''
+                    mkdir -p build-lambda
+                    cp target/*SNAPSHOT.jar build-lambda/
+                    cd build-lambda
+                    zip -r ../lambda.zip .
+                '''
+            }
+        }
+
+        stage('Install AWS CLI') {
             steps {
                 echo ' Verificando se o AWS CLI está instalado...'
                 sh '''
