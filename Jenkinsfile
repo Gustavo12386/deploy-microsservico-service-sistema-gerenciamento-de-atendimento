@@ -5,7 +5,7 @@ pipeline {
         AWS_REGION = 'us-east-1'
         S3_BUCKET  = 'lambda-deploys-gustavo'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
-        JAR_FILE = 'target/service-0.0.1-SNAPSHOT-aws.jar'
+        JAR_FILE = 'target/service-0.0.1-SNAPSHOT.jar'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
 
@@ -27,13 +27,13 @@ pipeline {
                 echo '🔨 Compilando o projeto com Maven...'
                 sh './mvnw clean package -DskipTests'
             }
-        }
+        }       
 
-        stage('Gerar pacote leve (ZIP)') {
+       stage('Gerar pacote ZIP leve') {
             steps {
-                   sh '''
+                sh '''
                     mkdir -p build-lambda
-                    cp target/*SNAPSHOT.jar build-lambda/
+                    cp ${JAR_FILE} build-lambda/
                     cd build-lambda
                     zip -r ../lambda.zip .
                 '''
@@ -63,7 +63,7 @@ pipeline {
 
         stage('Check AWS Account') {
             steps {
-                withAWS(region: 'us-east-1', credentials: 'aws-credentials') {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     sh '''
                         echo "🔍 Verificando conta AWS associada..."
                         aws sts get-caller-identity
@@ -74,7 +74,7 @@ pipeline {
        
          stage('Ensure S3 Bucket Exists') {
             steps {
-                withAWS(region: 'us-east-1', credentials: 'aws-credentials') {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                    script{
                       echo "🔍 Verificando se o bucket ${S3_BUCKET} existe..."
                       def result = sh(script: "aws s3api head-bucket --bucket ${S3_BUCKET} 2>&1 || true", returnStdout: true).trim()
@@ -98,7 +98,7 @@ pipeline {
                 ]]){
                     sh '''
                         echo "🚀 Enviando arquivo .jar para o S3..."
-                        aws s3 cp target/service-0.0.1-SNAPSHOT-aws.jar s3://${S3_BUCKET}/service-latest.jar --region ${AWS_REGION}
+                        aws s3 cp target/service-0.0.1-SNAPSHOT.jar s3://${S3_BUCKET}/service-latest.jar --region ${AWS_REGION}
 
                     '''
                 }
@@ -117,7 +117,7 @@ pipeline {
                             --function-name ${LAMBDA_FUNCTION} \
                             --runtime java17 \
                             --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                            --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
+                            --handler com.service.config.handler.LambdaHandler \
                             --region ${AWS_REGION}
 
                         aws lambda update-function-code \
@@ -131,7 +131,7 @@ pipeline {
                             --function-name ${LAMBDA_FUNCTION} \
                             --runtime java17 \
                             --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                            --handler org.springframework.cloud.function.adapter.aws.FunctionInvoker::handleRequest \
+                            --handler com.service.config.handler.LambdaHandler \
                             --code S3Bucket=${S3_BUCKET},S3Key=service-latest.jar \
                             --region ${AWS_REGION}
                     fi
