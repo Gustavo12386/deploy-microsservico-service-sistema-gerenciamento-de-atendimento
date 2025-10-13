@@ -5,7 +5,7 @@ pipeline {
         AWS_REGION = 'us-east-1'
         S3_BUCKET  = 'lambda-deploys-gustavo'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
-        JAR_FILE = 'target/service-0.0.1-SNAPSHOT.jar'
+        JAR_FILE = 'target/service-0.0.1-SNAPSHOT-jar-with-dependencies.jar'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
 
@@ -98,7 +98,7 @@ pipeline {
                 ]]){
                     sh '''
                         echo "🚀 Enviando arquivo .jar para o S3..."
-                        aws s3 cp target/service-0.0.1-SNAPSHOT.jar s3://${S3_BUCKET}/service-latest.jar --region ${AWS_REGION}
+                        aws s3 cp target/service-0.0.1-SNAPSHOT-jar-with-dependencies.jar s3://${S3_BUCKET}/service-latest.jar --region ${AWS_REGION}
 
                     '''
                 }
