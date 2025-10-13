@@ -104,7 +104,7 @@ pipeline {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     sh '''
-                    echo "🌐 Configurando Function URL com CORS..."
+                    echo " Configurando Function URL com CORS..."
                     cat > cors-config.json <<EOF
                     {
                         "AllowOrigins": ["*"],
