@@ -82,7 +82,7 @@ pipeline {
                         def functionName = "${LAMBDA_FUNCTION}"
                         def imageUri = "${ECR_URI}:${IMAGE_TAG}"
 
-                        echo "🆕 Criando função Lambda '${functionName}' com imagem '${imageUri}'..."
+                        echo " Criando função Lambda '${functionName}' com imagem '${imageUri}'..."
 
                         sh """
                         aws lambda create-function \
