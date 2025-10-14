@@ -3,9 +3,9 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-east-1'
-        ECR_REPO   = 'microsservico-atendimento'
-        AWS_ACCOUNT_ID = '381492003133'
-        LAMBDA_FUNCTION = 'microsservico-atendimento'
+        ECR_URI = '381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento'
+        IMAGE_TAG = 'latest'
+        LAMBDA_FUNCTION = 'microservice-atendimento'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
 
@@ -72,33 +72,30 @@ pipeline {
             }
         }
 
-        stage('Deploy Lambda Image') {
+        stage('Create Lambda Function') {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     script {
-                        sh '''
-                        IMAGE_URI=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                        def functionName = "${LAMBDA_FUNCTION}"
+                        def imageUri = "${ECR_URI}:${IMAGE_TAG}"
 
-                        if aws lambda get-function --function-name ${LAMBDA_FUNCTION} >/dev/null 2>&1; then
-                            echo "🔄 Atualizando função existente..."
-                            aws lambda update-function-code \
-                                --function-name ${LAMBDA_FUNCTION} \
-                                --image-uri $IMAGE_URI \
-                                --region ${AWS_REGION}
-                        else
-                            echo "🆕 Criando nova função Lambda com imagem..."
+                        echo "🆕 Criando função Lambda '${functionName}' com imagem '${imageUri}'..."
+
+                        sh """
                             aws lambda create-function \
-                                --function-name ${LAMBDA_FUNCTION} \
+                                --function-name ${functionName} \
                                 --package-type Image \
-                                --code ImageUri=$IMAGE_URI \
-                                --role arn:aws:iam::${AWS_ACCOUNT_ID}:role/lambda-deploy-role \
+                                --code ImageUri=${imageUri} \
+                                --role arn:aws:iam::381492003133:role/lambda-deploy-role \
                                 --region ${AWS_REGION}
-                        fi
-                        '''
+                        """
+
+                        echo "✅ Função Lambda criada com sucesso!"
                     }
                 }
             }
         }
+
 
         stage('Create Function URL (with CORS)') {
             steps {
@@ -117,7 +114,7 @@ pipeline {
                         --function-name ${LAMBDA_FUNCTION} \
                         --auth-type NONE \
                         --cors file://cors-config.json \
-                        --region ${AWS_REGION} || echo "🔄 Function URL já existe."
+                        --region ${AWS_REGION} || echo " Function URL já existe."
 
                     aws lambda get-function-url-config --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION}
                     '''
