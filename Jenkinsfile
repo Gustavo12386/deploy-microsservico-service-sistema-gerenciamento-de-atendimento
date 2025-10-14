@@ -3,9 +3,11 @@ pipeline {
 
     environment {
         AWS_REGION = 'us-east-1'
-        ECR_URI = '381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento'
+        AWS_ACCOUNT_ID = '381492003133'
+        ECR_REPO = 'microsservico-atendimento'
+        ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
         IMAGE_TAG = 'latest'
-        LAMBDA_FUNCTION = 'microservice-atendimento'
+        LAMBDA_FUNCTION = 'microsservico-atendimento'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
 
@@ -19,7 +21,7 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh 'docker build -t ${ECR_REPO}:latest .'
+                    sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
                 }
             }
         }
@@ -82,10 +84,10 @@ pipeline {
                         echo "🆕 Criando função Lambda '${functionName}' com imagem '${imageUri}'..."
 
                         sh """
-                            aws lambda create-function \
-                                --function-name ${functionName} \
-                                --package-type Image \
-                                --code ImageUri=${imageUri} \
+                           aws lambda create-function \
+                           --function-name microservice-atendimento \
+                           --package-type Image \
+                           --code ImageUri=381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest
                                 --role arn:aws:iam::381492003133:role/lambda-deploy-role \
                                 --region ${AWS_REGION}
                         """
