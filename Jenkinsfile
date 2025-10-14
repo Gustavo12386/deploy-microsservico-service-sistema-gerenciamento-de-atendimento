@@ -7,6 +7,7 @@ pipeline {
         ECR_REPO = 'microsservico-atendimento'
         ECR_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}"
         IMAGE_TAG = 'latest'
+        ROLE_ARN = 'arn:aws:iam::381492003133:role/lambda-deploy-role'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
     }
@@ -84,12 +85,12 @@ pipeline {
                         echo "🆕 Criando função Lambda '${functionName}' com imagem '${imageUri}'..."
 
                         sh """
-                           aws lambda create-function \
-                           --function-name microservice-atendimento \
-                           --package-type Image \
-                           --code ImageUri=381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest
-                                --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                                --region ${AWS_REGION}
+                        aws lambda create-function \
+                            --function-name ${LAMBDA_FUNCTION} \
+                            --package-type Image \
+                            --code ImageUri=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} \
+                            --role ${ROLE_ARN} \
+                            --region ${AWS_REGION}
                         """
 
                         echo "✅ Função Lambda criada com sucesso!"
