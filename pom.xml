@@ -142,6 +142,7 @@
                 </execution>
             </executions>
             <configuration>
+			   <mainClass>com.service.config.handler.StreamLambdaHandler</mainClass>
 			   <layered>true</layered>
                 <excludes>
                     <exclude>
