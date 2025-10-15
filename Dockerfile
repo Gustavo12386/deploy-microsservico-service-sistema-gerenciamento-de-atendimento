@@ -13,7 +13,7 @@ RUN mvn clean package -DskipTests
 FROM public.ecr.aws/lambda/java:21
 
 # Copia o JAR gerado para o diretório da Lambda
-COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/application.jar
+COPY --from=build /app/target/*.jar ${LAMBDA_TASK_ROOT}/application.jar
 
 # Define o handler padrão (para Spring Boot REST, é org.springframework.boot.loader.launch.JarLauncher)
 CMD ["org.springframework.boot.loader.launch.JarLauncher"]
