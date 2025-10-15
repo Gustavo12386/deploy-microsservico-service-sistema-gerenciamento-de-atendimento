@@ -19,7 +19,5 @@ FROM public.ecr.aws/lambda/java:21
 # ⚠️ Aqui usamos o nome EXATO do JAR gerado no target
 COPY --from=build /app/target/*SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/application.jar
 
-ENTRYPOINT ["/bin/bash"]
-
 # Define o handler padrão do Spring Boot
 CMD ["org.springframework.boot.loader.launch.JarLauncher"]
