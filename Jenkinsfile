@@ -40,9 +40,9 @@ pipeline {
                     def result = sh(
                         script: '''
                             docker run --rm \
-                              -v $(pwd)/target:/target \
-                              eclipse-temurin:21 \
-                              bash -c "jar tf /target/service-0.0.1-SNAPSHOT.jar | grep StreamLambdaHandler || true"
+                            -v $(pwd)/target:/target \
+                            eclipse-temurin:21 \
+                            bash -c "jar tf /target/service-0.0.1-SNAPSHOT.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada'"
                         ''',
                         returnStdout: true
                     ).trim()
