@@ -64,17 +64,17 @@ pipeline {
             }
         }
 
-        stage('Testar Classe no Container') {
-            steps {
-                echo '🧠 Testando se a classe existe dentro da imagem Docker...'
-                sh '''
-                    docker run --rm \
-                    --entrypoint /bin/sh \
-                    ${ECR_REPO}:${IMAGE_TAG} \
-                    -c "ls /var/task && jar tf /var/task/app.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
-                '''
-            }
-        }
+         stage('Testar Classe no Container') {
+            steps {
+                echo '🧠 Testando se a classe existe dentro da imagem Docker...'
+                sh '''
+                    docker run --rm \
+                    --entrypoint /bin/sh \
+                    ${ECR_REPO}:${IMAGE_TAG} \
+                    -c "ls /var/task && jar tf /var/task/app.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
+                '''
+            }
+        }
 
         stage('Install AWS CLI') {
             steps {
