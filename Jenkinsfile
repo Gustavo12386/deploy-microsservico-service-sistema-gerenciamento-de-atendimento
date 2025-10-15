@@ -22,7 +22,13 @@ pipeline {
          stage('Build JAR com Maven') {
             steps {
                 echo '🔨 Compilando projeto e empacotando JAR...'
-                sh 'mvn clean package spring-boot:repackage -DskipTests'
+                sh '''
+                docker run --rm \
+                    -v $(pwd):/app \
+                    -w /app \
+                    maven:3.9.9-eclipse-temurin-21 \
+                    mvn clean package spring-boot:repackage -DskipTests
+            '''
             }
         }
 
