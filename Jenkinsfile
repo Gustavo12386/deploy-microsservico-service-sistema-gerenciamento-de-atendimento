@@ -85,12 +85,21 @@ pipeline {
                         echo " Criando função Lambda '${functionName}' com imagem '${imageUri}'..."
 
                         sh """
-                        aws lambda create-function \
-                            --function-name ${LAMBDA_FUNCTION} \
-                            --package-type Image \
-                            --code ImageUri=${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} \
-                            --role ${ROLE_ARN} \
-                            --region ${AWS_REGION}
+                        if aws lambda get-function --function-name microsservico-atendimento --region us-east-1 >/dev/null 2>&1; then
+                            echo "🔁 Função já existe — atualizando imagem..."
+                            aws lambda update-function-code \
+                                --function-name microsservico-atendimento \
+                                --image-uri 381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
+                                --region us-east-1
+                            else
+                            echo "🆕 Criando nova função Lambda..."
+                            aws lambda create-function \
+                                --function-name microsservico-atendimento \
+                                --package-type Image \
+                                --code ImageUri=381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
+                                --role arn:aws:iam::381492003133:role/lambda-deploy-role \
+                                --region us-east-1
+                            fi
                         """
 
                         echo "✅ Função Lambda criada com sucesso!"
@@ -98,32 +107,7 @@ pipeline {
                 }
             }
         }
-
-
-        stage('Create Function URL (with CORS)') {
-            steps {
-                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-                    sh '''
-                    echo " Configurando Function URL com CORS..."
-                    cat > cors-config.json <<EOF
-                    {
-                        "AllowOrigins": ["*"],
-                        "AllowMethods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-                        "AllowHeaders": ["*"]
-                    }
-                    EOF
-
-                    aws lambda create-function-url-config \
-                        --function-name ${LAMBDA_FUNCTION} \
-                        --auth-type NONE \
-                        --cors file://cors-config.json \
-                        --region ${AWS_REGION} || echo " Function URL já existe."
-
-                    aws lambda get-function-url-config --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION}
-                    '''
-                }
-            }
-        }
+        
     }
 
     post {
