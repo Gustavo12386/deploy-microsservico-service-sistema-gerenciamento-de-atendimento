@@ -14,7 +14,7 @@ RUN mvn clean package spring-boot:repackage -DskipTests
 FROM public.ecr.aws/lambda/java:21
 
 # Copia o JAR final
-COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/application.jar
+COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
 
 # Handler completo do Spring Boot (AWS + Lambda container)
 CMD ["com.service.config.handler.StreamLambdaHandler"]

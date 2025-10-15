@@ -69,7 +69,7 @@ pipeline {
                 echo '🧠 Testando se a classe existe dentro da imagem Docker...'
                 sh '''
                     docker run --rm ${ECR_REPO}:${IMAGE_TAG} \
-                    sh -c "jar tf /var/task/application.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
+                    sh -c "ls /var/task && jar tf /var/task/app.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
                 '''
             }
         }
