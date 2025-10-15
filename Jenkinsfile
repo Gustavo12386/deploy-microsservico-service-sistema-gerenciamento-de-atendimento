@@ -19,11 +19,52 @@ pipeline {
             }
         }
 
+         stage('Build JAR com Maven') {
+            steps {
+                echo '🔨 Compilando projeto e empacotando JAR...'
+                sh 'mvn clean package spring-boot:repackage -DskipTests'
+            }
+        }
+
+        stage('Verificar StreamLambdaHandler no JAR') {
+            steps {
+                echo '🔎 Verificando se a classe StreamLambdaHandler foi empacotada...'
+                script {
+                    // Testa se a classe existe dentro do JAR
+                    def result = sh(
+                        script: '''
+                            docker run --rm \
+                              -v $(pwd)/target:/target \
+                              eclipse-temurin:21 \
+                              bash -c "jar tf /target/service-0.0.1-SNAPSHOT.jar | grep StreamLambdaHandler || true"
+                        ''',
+                        returnStdout: true
+                    ).trim()
+
+                    if (!result.contains("StreamLambdaHandler")) {
+                        error("❌ A classe StreamLambdaHandler não foi encontrada dentro do JAR! Abortando pipeline.")
+                    } else {
+                        echo "✅ Classe StreamLambdaHandler encontrada com sucesso dentro do JAR!"
+                    }
+                }
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
                    sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
                 }
+            }
+        }
+
+         stage('Testar Classe no Container') {
+            steps {
+                echo '🧠 Testando se a classe existe dentro da imagem Docker...'
+                sh '''
+                    docker run --rm ${ECR_REPO}:${IMAGE_TAG} \
+                    sh -c "jar tf /var/task/application.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
+                '''
             }
         }
 
