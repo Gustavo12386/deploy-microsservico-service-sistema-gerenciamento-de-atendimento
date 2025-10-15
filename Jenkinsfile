@@ -23,6 +23,7 @@ pipeline {
             steps {
                 script {
                     sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
+                    sh "docker run --rm ${ECR_REPO}:${IMAGE_TAG} ls /var/task"
                 }
             }
         }
