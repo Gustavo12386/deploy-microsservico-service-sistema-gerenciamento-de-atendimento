@@ -12,17 +12,20 @@ RUN ./mvnw dependency:go-offline
 # Copia o código-fonte
 COPY src ./src
 
-# Compila e empacota o JAR Spring Boot (com repackage)
-RUN ./mvnw clean package spring-boot:repackage -DskipTests
+# Compila e empacota o JAR completo (repackage)
+RUN ./mvnw clean package -DskipTests
 
-# Etapa 2 — Imagem final (AWS Lambda Java)
+# Etapa 2 — Imagem final baseada no runtime da AWS Lambda
 FROM public.ecr.aws/lambda/java:21
 
-# Copia o JAR para o diretório padrão da Lambda
-COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
+# Copia o JAR gerado para o diretório padrão da Lambda
+COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/lib/app.jar
 
-# Define o handler da Lambda (via Spring Boot Loader)
-CMD ["com.service.config.handler.StreamLambdaHandler"]
+# Define o handler Java da Lambda (classe que implementa RequestStreamHandler)
+ENV _HANDLER=com.service.config.handler.StreamLambdaHandler
+
+# Define o comando padrão (Lambda já reconhece o handler automaticamente)
+CMD ["app.jar"]
 
 
 

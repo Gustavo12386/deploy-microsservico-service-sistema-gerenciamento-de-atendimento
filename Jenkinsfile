@@ -27,7 +27,7 @@ pipeline {
                     -v $(pwd):/app \
                     -w /app \
                     maven:3.9.9-eclipse-temurin-21 \
-                    mvn clean package spring-boot:repackage -DskipTests
+                    mvn clean package -DskipTests
             '''
             }
         }
