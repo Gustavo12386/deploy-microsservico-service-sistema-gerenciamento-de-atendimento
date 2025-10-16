@@ -71,7 +71,19 @@ pipeline {
                     docker run --rm \
                     --entrypoint /bin/sh \
                     ${ECR_REPO}:${IMAGE_TAG} \
-                    -c "ls /var/task && jar tf /var/task/application.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
+                    -c "ls /var/task && jar tf /var/task/app.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
+                '''
+            }
+        }
+
+        stage('Testar Execução do Handler no Container') {
+            steps {
+                echo '🧪 Testando execução do StreamLambdaHandler dentro do container...'
+                sh '''
+                    docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c '
+                      echo "▶️ Tentando inicializar o handler..." &&
+                      java -cp /var/task/app.jar com.service.config.handler.StreamLambdaHandler || echo "⚠️ Falha ao executar handler (verifique o classpath)"
+                    '
                 '''
             }
         }
