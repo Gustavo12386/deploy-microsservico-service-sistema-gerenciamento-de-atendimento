@@ -22,7 +22,7 @@ FROM public.ecr.aws/lambda/java:21
 COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
 
 # Define o handler da Lambda (via Spring Boot Loader)
-CMD ["org.springframework.boot.loader.launch.JarLauncher"]
+CMD ["com.service.config.handler.StreamLambdaHandler"]
 
 
 
