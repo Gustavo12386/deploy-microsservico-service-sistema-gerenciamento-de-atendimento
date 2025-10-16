@@ -1,6 +1,7 @@
 # Etapa 1 - Build do JAR com Maven
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 WORKDIR /app
+
 # Copia o Maven wrapper ou pom.xml e dependências primeiro (cache)
 COPY pom.xml .
 COPY mvnw .
@@ -19,10 +20,11 @@ RUN ./mvnw clean package spring-boot:repackage -DskipTests
 FROM public.ecr.aws/lambda/java:21
 
 # Copia o jar gerado para o local esperado pelo runtime da Lambda
-COPY --from=builder /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
+COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
 
 # Define a classe handler principal da Lambda
 CMD ["com.service.config.handler.StreamLambdaHandler"]
+
 
 
 
