@@ -7,6 +7,9 @@ COPY pom.xml .
 COPY mvnw .
 COPY .mvn .mvn
 
+# Dá permissão de execução ao wrapper do Maven
+RUN chmod +x mvnw
+
 # Baixa dependências para cache
 RUN ./mvnw dependency:go-offline
 
