@@ -64,14 +64,26 @@ pipeline {
             }
         }
 
-         stage('Testar Classe no Container') {
+        stage('Testar Classe no Container') {
             steps {
-                echo '🧠 Testando se a classe existe dentro da imagem Docker...'
+                echo '🧪 Testando execução do StreamLambdaHandler dentro do container...'
                 sh '''
-                    docker run --rm \
-                    --entrypoint /bin/sh \
-                    ${ECR_REPO}:${IMAGE_TAG} \
-                    -c "ls /var/task && jar tf /var/task/app.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
+                    set -e
+
+                    echo "📦 Listando conteúdo do /var/task dentro da imagem..."
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls -R /var/task"
+
+                    echo "🔍 Verificando se o JAR contém a classe StreamLambdaHandler..."
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "
+                        jar tf /var/task/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo '❌ Classe não encontrada no JAR!'
+                    "
+
+                    echo "▶️ Tentando inicializar o handler via Spring Boot Loader..."
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c '
+                        java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help > /dev/null 2>&1 &&
+                        echo "✅ Handler carregado com sucesso via Spring Boot Loader!" ||
+                        echo "⚠️ Falha ao inicializar o handler (verifique o classpath ou a estrutura do JAR)."
+                    '
                 '''
             }
         }
@@ -82,7 +94,8 @@ pipeline {
                 sh '''
                     docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c '
                       echo "▶️ Tentando inicializar o handler..." &&
-                      java -cp /var/task/app.jar com.service.config.handler.StreamLambdaHandler || echo "⚠️ Falha ao executar handler (verifique o classpath)"
+                      java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher
+                      || echo "⚠️ Falha ao executar handler (verifique o classpath)"
                     '
                 '''
             }

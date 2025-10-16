@@ -1,32 +1,32 @@
-# Etapa 1 - Build do JAR com Maven
 FROM maven:3.9.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
-# Copia o Maven wrapper ou pom.xml e dependências primeiro (cache)
-COPY pom.xml .
-COPY mvnw .
+# Copia o Maven Wrapper e o pom.xml
+COPY mvnw ./
 COPY .mvn .mvn
+COPY pom.xml .
 
-# Dá permissão de execução ao wrapper do Maven
+# Dá permissão de execução ao Maven Wrapper
 RUN chmod +x mvnw
 
-# Baixa dependências para cache
+# Baixa dependências (cache)
 RUN ./mvnw dependency:go-offline
 
-# Copia o restante do código
+# Copia o restante do código-fonte
 COPY src ./src
 
-# Compila e empacota o jar (Spring Boot + repackage)
+# Compila e empacota o JAR (gera o app.jar Spring Boot reempacotado)
 RUN ./mvnw clean package spring-boot:repackage -DskipTests
 
-# Etapa 2 — Imagem final (AWS Lambda Java)
 FROM public.ecr.aws/lambda/java:21
 
-# Copia o jar gerado para o local esperado pelo runtime da Lambda
-COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
+# Copia o JAR gerado para o diretório da Lambda
+COPY --from=build /app/target/*.jar ${LAMBDA_TASK_ROOT}/app.jar
 
-# Define a classe handler principal da Lambda
+# Define o handler principal da Lambda
+# (não coloque ::handleRequest — o runtime já chama automaticamente)
 CMD ["com.service.config.handler.StreamLambdaHandler"]
+
 
 
 
