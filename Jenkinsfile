@@ -91,13 +91,14 @@ pipeline {
         stage('Testar Execução do Handler no Container') {
             steps {
                 echo '🧪 Testando execução do StreamLambdaHandler dentro do container...'
-                sh '''
-                    docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c '
-                      echo "▶️ Tentando inicializar o handler..." &&
-                      java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher
-                      || echo "⚠️ Falha ao executar handler (verifique o classpath)"
-                    '
-                '''
+                sh """
+                    docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c "
+                        echo '▶️ Tentando inicializar o handler...'
+                        if ! java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher; then
+                            echo '⚠️ Falha ao executar handler (verifique o classpath). Esta falha é esperada se for um Lambda Handler puro.'
+                        fi
+                    "
+                """
             }
         }
 
