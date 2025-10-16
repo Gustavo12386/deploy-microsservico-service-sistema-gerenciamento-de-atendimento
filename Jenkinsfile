@@ -71,7 +71,7 @@ pipeline {
                     docker run --rm \
                     --entrypoint /bin/sh \
                     ${ECR_REPO}:${IMAGE_TAG} \
-                    -c "ls /var/task && jar tf /var/task/app.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
+                    -c "ls /var/task && jar tf /var/task/application.jar | grep StreamLambdaHandler || echo '❌ Classe não encontrada no container'"
                 '''
             }
         }
@@ -119,10 +119,13 @@ pipeline {
                     sh '''
                     docker tag ${ECR_REPO}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
                     docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                    echo "⏳ Aguardando propagação da imagem no ECR..."
+                    sleep 15
                     '''
                 }
             }
         }
+
 
         stage('Create Lambda Function') {
             steps {
