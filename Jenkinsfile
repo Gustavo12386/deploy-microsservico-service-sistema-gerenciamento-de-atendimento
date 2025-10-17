@@ -10,6 +10,7 @@ pipeline {
         ROLE_ARN = 'arn:aws:iam::381492003133:role/lambda-deploy-role'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
+        AWS_LAMBDA_HANDLER = 'com.service.config.handler.StreamLambdaHandler'
     }
 
     stages {
@@ -169,6 +170,7 @@ pipeline {
                                 --function-name microsservico-atendimento \
                                 --image-uri 381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
                                 --region us-east-1
+                                --handler ${AWS_LAMBDA_HANDLER}
                             else
                             echo "🆕 Criando nova função Lambda..."
                             aws lambda create-function \
@@ -177,6 +179,7 @@ pipeline {
                                 --code ImageUri=381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
                                 --role arn:aws:iam::381492003133:role/lambda-deploy-role \
                                 --region us-east-1
+                                --handler ${AWS_LAMBDA_HANDLER}
                             fi
                         """
 
