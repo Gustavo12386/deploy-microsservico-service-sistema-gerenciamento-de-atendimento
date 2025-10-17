@@ -9,6 +9,8 @@ pipeline {
         IMAGE_TAG = 'latest'
         ROLE_ARN = 'arn:aws:iam::381492003133:role/lambda-deploy-role'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
+        LAMBDA_MEMORY = '1024'
+        LAMBDA_TIMEOUT = '60'
         PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"        
     }
 
@@ -284,13 +286,42 @@ JAVA
             }
         }
         
-                
+        stage('Update Lambda with image digest and config') {
+            steps {
+                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+                    script {
+                        echo '🔁 Obtendo digest da imagem no ECR e atualizando Lambda (imagem imutável + config)'
+                        def digest = sh(returnStdout: true, script: "aws ecr describe-images --repository-name ${ECR_REPO} --image-ids imageTag=${IMAGE_TAG} --region ${AWS_REGION} --query 'imageDetails[0].imageDigest' --output text").trim()
+                        echo "🔍 Digest encontrado: ${digest}"
+
+                        if (!digest || digest == 'None') {
+                            error("❌ Não foi possível obter o digest da imagem no ECR. Aborting.")
+                        }
+
+                        def imageWithDigest = "${ECR_URI}@${digest}"
+                        echo "🚀 Atualizando função Lambda ${LAMBDA_FUNCTION} para usar a imagem com digest: ${imageWithDigest}"
+
+                        // exportar digest e imageWithDigest para o ambiente para uso em stages posteriores
+                        env.IMAGE_DIGEST = digest
+                        env.IMAGE_WITH_DIGEST = imageWithDigest
+
+                        sh "aws lambda update-function-code --function-name ${LAMBDA_FUNCTION} --image-uri ${imageWithDigest} --region ${AWS_REGION}"
+
+                        echo "⚙️ Atualizando configuração da função: memória=${LAMBDA_MEMORY}MB timeout=${LAMBDA_TIMEOUT}s"
+                        sh "aws lambda update-function-configuration --function-name ${LAMBDA_FUNCTION} --memory-size ${LAMBDA_MEMORY} --timeout ${LAMBDA_TIMEOUT} --region ${AWS_REGION}"
+                    }
+                }
+            }
+        }
+
        stage('Create Lambda Function') {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     script {
                        
-                        echo "🚀 Criando ou atualizando função Lambda '${LAMBDA_FUNCTION}' com imagem '${ECR_URI}:${IMAGE_TAG}'..."
+
+                        def deployImage = env.IMAGE_WITH_DIGEST ?: "${ECR_URI}:${IMAGE_TAG}"
+                        echo "🚀 Criando ou atualizando função Lambda '${LAMBDA_FUNCTION}' com imagem '${deployImage}'..."
 
                         sh """
                         # Usando as variáveis de ambiente no sh
@@ -298,14 +329,14 @@ JAVA
                             echo "🔁 Função já existe — atualizando imagem..."
                             aws lambda update-function-code \
                                 --function-name ${LAMBDA_FUNCTION} \
-                                --image-uri ${ECR_URI}:${IMAGE_TAG} \
+                                --image-uri ${deployImage} \
                                 --region ${AWS_REGION}
                         else
                             echo "🆕 Criando nova função Lambda..."
                             aws lambda create-function \
                                 --function-name ${LAMBDA_FUNCTION} \
                                 --package-type Image \
-                                --code ImageUri=${ECR_URI}:${IMAGE_TAG} \
+                                --code ImageUri=${deployImage} \
                                 --role ${ROLE_ARN} \
                                 --region ${AWS_REGION}
                         fi
