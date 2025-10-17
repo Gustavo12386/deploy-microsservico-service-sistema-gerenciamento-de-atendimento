@@ -109,9 +109,9 @@ COPY . /var/task/
 # Tell the Lambda runtime which handler to use (entrypoint expects a single argument)
 ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
 
-# Run the JarLauncher directly with a classpath that includes /var/task and /var/task/lib
-# We override the base image entrypoint and run java directly; the CMD remains the handler
-ENTRYPOINT ["/usr/bin/java","-cp","/var/runtime/lib/*:/var/task/*:/var/task/lib/*","org.springframework.boot.loader.JarLauncher"]
+## Use the base image entrypoint (/lambda-entrypoint.sh). Provide only the handler
+# as CMD so the Lambda runtime sets up the process correctly and loads classes
+# from /var/task and /var/task/lib (we previously exploded the jar into these paths).
 CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]
 EOF
                 '''
@@ -202,7 +202,7 @@ public class TestLoader {
 }
 JAVA
 
-                                            docker run --rm -v $(pwd)/lambda-image:/var/task -v $(pwd)/tmp_testloader:/tmp -w /tmp maven:3.9.9-eclipse-temurin-21 bash -c "javac -cp '/var/task/*' TestLoader.java && java -cp '/var/task/*:.' TestLoader" || true
+                                            docker run --rm -v $(pwd)/lambda-image:/var/task -v $(pwd)/tmp_testloader:/tmp -w /tmp maven:3.9.9-eclipse-temurin-21 bash -c "javac -cp '/var/task/*:/var/task/lib/*' TestLoader.java && java -cp '/var/task/*:/var/task/lib/*:.' TestLoader" || true
                                         '''
             }
         }
@@ -284,6 +284,7 @@ JAVA
             }
         }
         
+                
        stage('Create Lambda Function') {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
