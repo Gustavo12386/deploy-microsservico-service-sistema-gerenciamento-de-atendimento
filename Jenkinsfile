@@ -161,7 +161,7 @@ pipeline {
                         def functionName = "${LAMBDA_FUNCTION}"
                         def imageUri = "${ECR_URI}:${IMAGE_TAG}"
 
-                        echo " Criando função Lambda '${functionName}' com imagem '${imageUri}'..."
+                        echo "🚀 Criando ou atualizando função Lambda '${functionName}' com imagem '${imageUri}'..."
 
                         sh """
                         if aws lambda get-function --function-name microsservico-atendimento --region us-east-1 >/dev/null 2>&1; then
@@ -169,21 +169,21 @@ pipeline {
                             aws lambda update-function-code \
                                 --function-name microsservico-atendimento \
                                 --image-uri 381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
-                                --region us-east-1
+                                --region us-east-1 \
                                 --handler ${AWS_LAMBDA_HANDLER}
-                            else
+                        else
                             echo "🆕 Criando nova função Lambda..."
                             aws lambda create-function \
                                 --function-name microsservico-atendimento \
                                 --package-type Image \
                                 --code ImageUri=381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
                                 --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                                --region us-east-1
+                                --region us-east-1 \
                                 --handler ${AWS_LAMBDA_HANDLER}
-                            fi
+                        fi
                         """
 
-                        echo "✅ Função Lambda criada com sucesso!"
+                        echo "✅ Função Lambda criada ou atualizada com sucesso!"
                     }
                 }
             }
