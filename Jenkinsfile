@@ -89,15 +89,8 @@ pipeline {
 
                 cd ..
 
-                # create minimal Dockerfile for AWS Lambda image
-                cat > ${CONTEXT}/Dockerfile <<'EOF'
-                FROM public.ecr.aws/lambda/java:21
-
-                COPY . /var/task
-
-                ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
-
-                EOF
+                # create minimal Dockerfile for AWS Lambda image (use printf to avoid indentation issues)
+                printf '%s\n' 'FROM public.ecr.aws/lambda/java:21' '' 'COPY . /var/task' '' 'ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest' > ${CONTEXT}/Dockerfile
 
                 rm -rf tmp_explode
                 '''
