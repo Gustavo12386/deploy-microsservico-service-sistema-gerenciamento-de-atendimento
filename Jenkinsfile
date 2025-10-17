@@ -123,6 +123,31 @@ pipeline {
             }
         }
 
+        stage('Inspect built image') {
+            steps {
+                echo '🔎 Inspecting built Docker image (Cmd/Entrypoint/Env) and generated Dockerfile before push'
+                sh '''
+                set -e
+                IMAGE=${ECR_REPO}:${IMAGE_TAG}
+
+                echo "Local images (filter):"
+                docker images --format "{{.Repository}}:{{.Tag}} {{.ID}}" | grep -E "^${ECR_REPO}:${IMAGE_TAG}" || echo "Image ${IMAGE} not found locally"
+
+                echo "---- docker inspect summary ----"
+                docker inspect --format='Entrypoint: {{json .Config.Entrypoint}}' ${IMAGE} || true
+                docker inspect --format='Cmd: {{json .Config.Cmd}}' ${IMAGE} || true
+                docker inspect --format='Env: {{json .Config.Env}}' ${IMAGE} || true
+
+                echo "---- lambda-image/Dockerfile content ----"
+                if [ -f lambda-image/Dockerfile ]; then
+                    cat lambda-image/Dockerfile
+                else
+                    echo 'lambda-image/Dockerfile not found'
+                fi
+                '''
+            }
+        }
+
         stage('Testar Execução do Handler no Container') {
             steps {
                 echo '🧪 Testando execução do StreamLambdaHandler dentro do container...'
