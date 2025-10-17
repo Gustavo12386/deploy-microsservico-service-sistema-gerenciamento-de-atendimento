@@ -74,8 +74,8 @@ pipeline {
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls -R /var/task"
 
                     echo "🔍 Verificando se o JAR contém a classe StreamLambdaHandler..."
-                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "
-                        jar tf /var/task/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo '❌ Classe não encontrada no JAR!'
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c  "
+                        jar tf /var/task/lib/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo "❌ Classe não encontrada no JAR!'
                     "
 
                     echo "▶️ Tentando inicializar o handler via Spring Boot Loader..."
