@@ -74,11 +74,13 @@ pipeline {
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls -R /var/task"
 
                     echo "🔍 Verificando se o JAR contém a classe StreamLambdaHandler..."
-                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c  "
-                        jar tf /var/task/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo "❌ Classe não encontrada no JAR!'
+                    // CORREÇÃO: Usando aspas duplas para o comando -c para evitar conflito com ' no echo
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "
+                        jar tf /var/task/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo '❌ Classe não encontrada no JAR!'
                     "
 
                     echo "▶️ Tentando inicializar o handler via Spring Boot Loader..."
+                    // Este bloco já estava sintaticamente correto
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c '
                         java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help > /dev/null 2>&1 &&
                         echo "✅ Handler carregado com sucesso via Spring Boot Loader!" ||
