@@ -14,13 +14,18 @@ RUN ./mvnw clean package -DskipTests
 # Etapa 2 — Imagem final (para AWS Lambda)
 FROM public.ecr.aws/lambda/java:21
 
-# Copia o JAR para o diretório padrão do Lambda
-COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
+# Copia o jar gerado
+COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar /tmp/app.jar
 
-# Define o handler
+# Extrai o conteúdo do JAR para o diretório da Lambda
+RUN cd ${LAMBDA_TASK_ROOT} && \
+    jar -xf /tmp/app.jar && \
+    rm /tmp/app.jar
+
+# Define o handler correto
 ENV _HANDLER=com.service.config.handler.StreamLambdaHandler
 
-
+# Comando padrão do Lambda
 CMD ["com.service.config.handler.StreamLambdaHandler"]
 
 

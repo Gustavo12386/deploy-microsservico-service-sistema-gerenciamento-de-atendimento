@@ -158,10 +158,7 @@ pipeline {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     script {
-                        def functionName = "${LAMBDA_FUNCTION}"
-                        def imageUri = "${ECR_URI}:${IMAGE_TAG}"
-
-                        echo "🚀 Criando ou atualizando função Lambda '${functionName}' com imagem '${imageUri}'..."
+                       echo "🚀 Criando ou atualizando função Lambda '${functionName}' com imagem '${imageUri}'..."
 
                         sh """
                         if aws lambda get-function --function-name microsservico-atendimento --region us-east-1 >/dev/null 2>&1; then
