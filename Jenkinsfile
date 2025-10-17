@@ -73,22 +73,45 @@ pipeline {
                     exit 1
                 fi
 
-                # copy the fat/executable jar to the lambda image context
+                # copy the fat/executable jar to the lambda image context (kept for reference)
                 cp "${JAR}" ${CONTEXT}/app.jar
 
-                # create Dockerfile that uses the Spring Boot JarLauncher so internal BOOT-INF is respected
+                # Explode the fat jar and move BOOT-INF/classes -> ${CONTEXT}/
+                # and BOOT-INF/lib -> ${CONTEXT}/lib so the Lambda base image
+                # runtime will find classes under /var/task and dependency jars under /var/task/lib
+                mkdir -p ${CONTEXT}/lib
+                mkdir -p explode_tmp
+                (cd explode_tmp && jar xf ../${JAR})
+                # Move classes (if present)
+                if [ -d explode_tmp/BOOT-INF/classes ]; then
+                    mkdir -p ${CONTEXT}
+                    cp -a explode_tmp/BOOT-INF/classes/. ${CONTEXT}/ || true
+                fi
+                # Move dependency jars
+                if [ -d explode_tmp/BOOT-INF/lib ]; then
+                    mkdir -p ${CONTEXT}/lib
+                    cp -a explode_tmp/BOOT-INF/lib/. ${CONTEXT}/lib/ || true
+                fi
+                rm -rf explode_tmp
+
+                # create Dockerfile that keeps handler as the single CMD argument so
+                # /lambda-entrypoint.sh sets _HANDLER and the base runtime loads classes
                 cat > ${CONTEXT}/Dockerfile <<'EOF'
 FROM public.ecr.aws/lambda/java:21
 
-# Copy the fat jar (Spring Boot executable jar)
+# Copy the fat jar (Spring Boot executable jar) for reference
 COPY app.jar /var/task/app.jar
+
+# Copy exploded classes and libs from the build context into the image
+# This will place BOOT-INF/classes content at /var/task and BOOT-INF/lib jars at /var/task/lib
+COPY . /var/task/
 
 # Tell the Lambda runtime which handler to use (entrypoint expects a single argument)
 ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
 
-# For the Lambda base image the entrypoint (/lambda-entrypoint.sh) expects the handler
-# as the single CMD argument; provide only the handler string so the entrypoint will
-# receive exactly one argument and set up the runtime correctly.
+# Run the JarLauncher directly with a classpath that includes /var/task and /var/task/lib
+# We override the base image entrypoint and run java directly; the CMD remains the handler
+ENTRYPOINT ["/usr/bin/java","-cp","/var/runtime/lib/*:/var/task/*:/var/task/lib/*","org.springframework.boot.loader.JarLauncher"]
 CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]
 EOF
                 '''
@@ -98,7 +121,17 @@ EOF
         stage('Build Docker Image') {
             steps {
                 script {
-                   sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} lambda-image"
+                   sh '''
+                   set -e
+                   echo "\n>>> Conteúdo de lambda-image (contexto do build) - início >>>"
+                   ls -la lambda-image || true
+                   echo "\n>>> Listagem recursiva (mostra onde as classes e libs estão) >>>"
+                   ls -R lambda-image || true
+                   echo "\n>>> Conteúdo de lambda-image/lib (dependências) >>>"
+                   ls -la lambda-image/lib || echo 'lambda-image/lib não existe'
+                   echo "\n>>> Iniciando docker build... >>>"
+                   docker build -t ${ECR_REPO}:${IMAGE_TAG} lambda-image
+                   '''
                 }
             }
         }
