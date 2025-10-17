@@ -94,7 +94,7 @@ pipeline {
                 sh """
                     docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c "
                         echo '▶️ Tentando inicializar o handler...'
-                        if ! java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help; then
+                        if ! java -cp /var/task/lib/app.jar org.springframework.boot.loader.launch.JarLauncher --help; then
                             echo '⚠️ Falha ao executar handler (verifique o classpath). Esta falha é esperada se for um Lambda Handler puro.'
                         fi
                     "
