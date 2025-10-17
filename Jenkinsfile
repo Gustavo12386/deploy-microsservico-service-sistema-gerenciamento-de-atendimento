@@ -168,18 +168,16 @@ pipeline {
                             echo "🔁 Função já existe — atualizando imagem..."
                             aws lambda update-function-code \
                                 --function-name microsservico-atendimento \
-                                --image-uri 381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
-                                --region us-east-1 \
-                                --handler ${AWS_LAMBDA_HANDLER}
+                                --image-uri ${imageUri} \
+                                --region us-east-1
                         else
                             echo "🆕 Criando nova função Lambda..."
                             aws lambda create-function \
                                 --function-name microsservico-atendimento \
                                 --package-type Image \
-                                --code ImageUri=381492003133.dkr.ecr.us-east-1.amazonaws.com/microsservico-atendimento:latest \
+                                --code ImageUri=${imageUri} \
                                 --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                                --region us-east-1 \
-                                --handler ${AWS_LAMBDA_HANDLER}
+                                --region us-east-1
                         fi
                         """
 
@@ -188,6 +186,7 @@ pipeline {
                 }
             }
         }
+
         
     }
 
