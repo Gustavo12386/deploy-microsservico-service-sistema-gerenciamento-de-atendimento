@@ -336,6 +336,7 @@ JAVA
                             aws lambda create-function \
                                 --function-name ${LAMBDA_FUNCTION} \
                                 --package-type Image \
+
                                 --code ImageUri=${deployImage} \
                                 --role ${ROLE_ARN} \
                                 --region ${AWS_REGION}
