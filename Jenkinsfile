@@ -151,28 +151,28 @@ pipeline {
         stage('Runtime classloader test (compile+run)') {
             steps {
                echo '🧪 Verificando se a classe ContainerInitializationException pode ser carregada a partir de /var/task jars (usando JDK container)'
-                    sh '''
-                      set -e
-                      # Usa um JDK container para compilar e executar um pequeno TestLoader
-                      # monta o contexto lambda-image em /var/task para replicar o classpath do Lambda
-                          docker run --rm -v $(pwd)/lambda-image:/var/task -w /tmp maven:3.9.9-eclipse-temurin-21 bash -c '
-                      cat > TestLoader.java <<"JAVA"
-                public class TestLoader {
-                    public static void main(String[] args) {
-                        try {
-                            Class.forName("com.amazonaws.serverless.exceptions.ContainerInitializationException");
-                            System.out.println("FOUND: ContainerInitializationException");
-                        } catch (Throwable t) {
-                            System.out.println("NOT FOUND or error:");
-                            t.printStackTrace();
-                            System.exit(2);
-                        }
-                    }
-                }
-                JAVA
+                                        sh '''
+                                            set -e
+                                            # Usa um JDK container para compilar e executar um pequeno TestLoader
+                                            # Vamos criar o arquivo TestLoader.java localmente e montá-lo no container
+                                            mkdir -p tmp_testloader
+                                            cat > tmp_testloader/TestLoader.java <<'JAVA'
+public class TestLoader {
+    public static void main(String[] args) {
+        try {
+            Class.forName("com.amazonaws.serverless.exceptions.ContainerInitializationException");
+            System.out.println("FOUND: ContainerInitializationException");
+        } catch (Throwable t) {
+            System.out.println("NOT FOUND or error:");
+            t.printStackTrace();
+            System.exit(2);
+        }
+    }
+}
+JAVA
 
-                javac -cp "/var/task/*" TestLoader.java && java -cp "/var/task/*:." TestLoader || true
-               '''
+                                            docker run --rm -v $(pwd)/lambda-image:/var/task -v $(pwd)/tmp_testloader:/tmp -w /tmp maven:3.9.9-eclipse-temurin-21 bash -c "javac -cp '/var/task/*' TestLoader.java && java -cp '/var/task/*:.' TestLoader" || true
+                                        '''
             }
         }
 
