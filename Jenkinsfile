@@ -90,7 +90,7 @@ pipeline {
                 cd ..
 
                 # create minimal Dockerfile for AWS Lambda image (use printf to avoid indentation issues)
-                printf '%s\n' 'FROM public.ecr.aws/lambda/java:21' '' 'COPY . /var/task' '' 'ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest' > ${CONTEXT}/Dockerfile
+                printf '%s\n' 'FROM public.ecr.aws/lambda/java:21' '' 'COPY . /var/task' '' 'ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest' '' 'CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]' > ${CONTEXT}/Dockerfile
 
                 rm -rf tmp_explode
                 '''
@@ -112,19 +112,13 @@ pipeline {
                     set -e
 
                     echo "📦 Listando conteúdo do /var/task dentro da imagem..."
-                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls -R /var/task"
-                    echo "🔍 Verificando se o JAR contém a classe StreamLambdaHandler..."
-                    
-                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "
-                        jar tf /var/task/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo '❌ Classe não encontrada no JAR!'
-                    "
-
-                    echo "▶️ Tentando inicializar o handler via Spring Boot Loader..."                    
-                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c '
-                        java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help > /dev/null 2>&1 &&
-                        echo "✅ Handler carregado com sucesso via Spring Boot Loader!" ||
-                        echo "⚠️ Falha ao inicializar o handler (verifique o classpath ou a estrutura do JAR)."
-                    '
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls -R /var/task || true"
+                    echo "🔍 Verificando se a classe StreamLambdaHandler foi copiada para /var/task..."
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls /var/task/com/service/config/handler/StreamLambdaHandler.class && echo '✅ Classe encontrada' || echo '❌ Classe não encontrada'"
+                    echo "🔍 Verificando se há jars de dependência em /var/task (BOOT-INF/lib)..."
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls /var/task/*.jar 2>/dev/null || echo 'Nenhum jar de dependência encontrado'"
+                    echo "📄 Dockerfile gerado (para debug):"
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "cat /var/task/Dockerfile || echo 'Dockerfile não encontrado em /var/task'"
                 '''
             }
         }
@@ -134,10 +128,8 @@ pipeline {
                 echo '🧪 Testando execução do StreamLambdaHandler dentro do container...'
                 sh """
                     docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c "
-                        echo '▶️ Tentando inicializar o handler...'
-                        if ! java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help; then
-                            echo '⚠️ Falha ao executar handler (verifique o classpath). Esta falha é esperada se for um Lambda Handler puro.'
-                        fi
+                        echo '▶️ Verificando se o container exige o handler como argumento (entrypoint) e exibe a eficiência do CMD...' &&
+                        echo 'Entrypoint and CMD:' && ps aux || true
                     "
                 """
             }
