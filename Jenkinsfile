@@ -154,27 +154,29 @@ pipeline {
         }
 
 
-        stage('Create Lambda Function') {
+       stage('Create Lambda Function') {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     script {
-                       echo "🚀 Criando ou atualizando função Lambda '${functionName}' com imagem '${imageUri}'..."
+                       
+                        echo "🚀 Criando ou atualizando função Lambda '${LAMBDA_FUNCTION}' com imagem '${ECR_URI}:${IMAGE_TAG}'..."
 
                         sh """
-                        if aws lambda get-function --function-name microsservico-atendimento --region us-east-1 >/dev/null 2>&1; then
+                        # Usando as variáveis de ambiente no sh
+                        if aws lambda get-function --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} >/dev/null 2>&1; then
                             echo "🔁 Função já existe — atualizando imagem..."
                             aws lambda update-function-code \
-                                --function-name microsservico-atendimento \
-                                --image-uri ${imageUri} \
-                                --region us-east-1
+                                --function-name ${LAMBDA_FUNCTION} \
+                                --image-uri ${ECR_URI}:${IMAGE_TAG} \
+                                --region ${AWS_REGION}
                         else
                             echo "🆕 Criando nova função Lambda..."
                             aws lambda create-function \
-                                --function-name microsservico-atendimento \
+                                --function-name ${LAMBDA_FUNCTION} \
                                 --package-type Image \
-                                --code ImageUri=${imageUri} \
-                                --role arn:aws:iam::381492003133:role/lambda-deploy-role \
-                                --region us-east-1
+                                --code ImageUri=${ECR_URI}:${IMAGE_TAG} \
+                                --role ${ROLE_ARN} \
+                                --region ${AWS_REGION}
                         fi
                         """
 
