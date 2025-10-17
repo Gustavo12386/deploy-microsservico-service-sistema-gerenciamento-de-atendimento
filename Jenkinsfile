@@ -83,11 +83,13 @@ FROM public.ecr.aws/lambda/java:21
 # Copy the fat jar (Spring Boot executable jar)
 COPY app.jar /var/task/app.jar
 
-# Tell the Lambda runtime which handler to use
+# Tell the Lambda runtime which handler to use (entrypoint expects a single argument)
 ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
 
-# Use the Spring Boot JarLauncher to start the app from the fat jar
-CMD ["org.springframework.boot.loader.JarLauncher","com.service.config.handler.StreamLambdaHandler::handleRequest"]
+# For the Lambda base image the entrypoint (/lambda-entrypoint.sh) expects the handler
+# as the single CMD argument; provide only the handler string so the entrypoint will
+# receive exactly one argument and set up the runtime correctly.
+CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]
 EOF
                 '''
             }
