@@ -21,6 +21,7 @@ COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app
 ENV _HANDLER=com.service.config.handler.StreamLambdaHandler
 
 # Executa via Spring Boot Loader
+ENTRYPOINT ["/lambda-entrypoint.sh"]
 CMD ["com.service.config.handler.StreamLambdaHandler"]
 
 
