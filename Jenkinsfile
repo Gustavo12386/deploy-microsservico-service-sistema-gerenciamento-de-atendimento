@@ -249,6 +249,24 @@ JAVA
             }
         }
 
+        stage('Verify pushed image') {
+            steps {
+                echo '🔁 Verificando a imagem empurrada para ECR (pull + inspect)'
+                sh '''
+                set -e
+                IMAGE=${ECR_URI}:${IMAGE_TAG}
+
+                echo "Pulling ${IMAGE} from ECR"
+                docker pull ${IMAGE}
+
+                echo '---- remote image inspect (Entrypoint/Cmd/Env) ----'
+                docker inspect --format='Entrypoint: {{json .Config.Entrypoint}}' ${IMAGE} || true
+                docker inspect --format='Cmd: {{json .Config.Cmd}}' ${IMAGE} || true
+                docker inspect --format='Env: {{json .Config.Env}}' ${IMAGE} || true
+                '''
+            }
+        }
+
 
        stage('Create Lambda Function') {
             steps {
