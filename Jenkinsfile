@@ -248,31 +248,7 @@ JAVA
                 }
             }
         }
-
-        stage('Verify pushed image') {
-            steps {
-                echo '🔁 Verificando a imagem empurrada para ECR (login + pull + inspect)'
-                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-                    sh '''
-                    set -e
-                    IMAGE=${ECR_URI}:${IMAGE_TAG}
-
-                    echo "Logging in to ECR ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-
-                    echo "Pulling ${IMAGE} from ECR"
-                    docker pull ${IMAGE}
-
-                    echo '---- remote image inspect (Entrypoint/Cmd/Env) ----'
-                    docker inspect --format='Entrypoint: {{json .Config.Entrypoint}}' ${IMAGE} || true
-                    docker inspect --format='Cmd: {{json .Config.Cmd}}' ${IMAGE} || true
-                    docker inspect --format='Env: {{json .Config.Env}}' ${IMAGE} || true
-                    '''
-                }
-            }
-        }
-
-
+        
        stage('Create Lambda Function') {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
