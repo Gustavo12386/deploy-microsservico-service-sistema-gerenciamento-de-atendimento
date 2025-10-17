@@ -73,26 +73,22 @@ pipeline {
                     exit 1
                 fi
 
-                # explode jar to temp and copy classes/libs to context
-                rm -rf tmp_explode || true
-                mkdir -p tmp_explode
-                cd tmp_explode
-                jar xf ../${JAR}
+                # copy the fat/executable jar to the lambda image context
+                cp "${JAR}" ${CONTEXT}/app.jar
 
-                if [ -d BOOT-INF/classes ]; then
-                    cp -r BOOT-INF/classes/* ../${CONTEXT}/
-                fi
+                # create Dockerfile that uses the Spring Boot JarLauncher so internal BOOT-INF is respected
+                cat > ${CONTEXT}/Dockerfile <<'EOF'
+FROM public.ecr.aws/lambda/java:21
 
-                if [ -d BOOT-INF/lib ]; then
-                    cp -r BOOT-INF/lib/* ../${CONTEXT}/
-                fi
+# Copy the fat jar (Spring Boot executable jar)
+COPY app.jar /var/task/app.jar
 
-                cd ..
+# Tell the Lambda runtime which handler to use
+ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
 
-                # create minimal Dockerfile for AWS Lambda image (use printf to avoid indentation issues)
-                printf '%s\n' 'FROM public.ecr.aws/lambda/java:21' '' 'COPY . /var/task' '' 'ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest' '' 'CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]' > ${CONTEXT}/Dockerfile
-
-                rm -rf tmp_explode
+# Use the Spring Boot JarLauncher to start the app from the fat jar
+CMD ["org.springframework.boot.loader.JarLauncher","com.service.config.handler.StreamLambdaHandler::handleRequest"]
+EOF
                 '''
             }
         }
@@ -116,7 +112,7 @@ pipeline {
                     echo "🔍 Verificando se a classe StreamLambdaHandler foi copiada para /var/task..."
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls /var/task/com/service/config/handler/StreamLambdaHandler.class && echo '✅ Classe encontrada' || echo '❌ Classe não encontrada'"
                     echo "🔍 Verificando se há jars de dependência em /var/task (BOOT-INF/lib)..."
-                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls /var/task/*.jar 2>/dev/null || echo 'Nenhum jar de dependência encontrado'"
+                    docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "ls /var/task/*.jar 2>/dev/null || echo 'Nenhum jar no /var/task'; ls /var/task/lib/*.jar 2>/dev/null || echo 'Nenhum jar em /var/task/lib'"
                     echo "📄 Dockerfile gerado (para debug):"
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c "cat /var/task/Dockerfile || echo 'Dockerfile não encontrado em /var/task'"
                 '''
@@ -185,6 +181,21 @@ JAVA
                         echo 'Entrypoint and CMD:' && ps aux || true
                     "
                 """
+            }
+        }
+
+        stage('Debug: show Lambda entrypoint script') {
+            steps {
+                echo '🐞 Mostrando /lambda-entrypoint.sh do base image para inspecionar classpath/entrypoint behavior'
+                sh '''
+                set -e
+                docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c "
+                    echo '--- /lambda-entrypoint.sh ---' && \
+                    if [ -f /lambda-entrypoint.sh ]; then cat /lambda-entrypoint.sh; else echo '/lambda-entrypoint.sh not present'; fi && \
+                    echo '\n--- /var/runtime/bootstrap (if present) ---' && \
+                    if [ -f /var/runtime/bootstrap ]; then cat /var/runtime/bootstrap; else echo 'bootstrap not present'; fi
+                "
+                '''
             }
         }
 
