@@ -75,12 +75,12 @@ pipeline {
 
                     echo "🔍 Verificando se o JAR contém a classe StreamLambdaHandler..."
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c  "
-                        jar tf /var/task/lib/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo "❌ Classe não encontrada no JAR!'
+                        jar tf /var/task/app.jar | grep com/service/config/handler/StreamLambdaHandler.class || echo "❌ Classe não encontrada no JAR!'
                     "
 
                     echo "▶️ Tentando inicializar o handler via Spring Boot Loader..."
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c '
-                        java -cp /var/task/lib/app.jar org.springframework.boot.loader.launch.JarLauncher --help > /dev/null 2>&1 &&
+                        java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help > /dev/null 2>&1 &&
                         echo "✅ Handler carregado com sucesso via Spring Boot Loader!" ||
                         echo "⚠️ Falha ao inicializar o handler (verifique o classpath ou a estrutura do JAR)."
                     '
@@ -94,7 +94,7 @@ pipeline {
                 sh """
                     docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c "
                         echo '▶️ Tentando inicializar o handler...'
-                        if ! java -cp /var/task/lib/app.jar org.springframework.boot.loader.launch.JarLauncher --help; then
+                        if ! java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help; then
                             echo '⚠️ Falha ao executar handler (verifique o classpath). Esta falha é esperada se for um Lambda Handler puro.'
                         fi
                     "

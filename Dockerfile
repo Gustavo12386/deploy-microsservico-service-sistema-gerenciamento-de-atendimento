@@ -11,17 +11,18 @@ RUN ./mvnw dependency:go-offline
 COPY src ./src
 RUN ./mvnw clean package -DskipTests
 
-# Etapa 2 — Imagem final da AWS Lambda
+# Etapa 2 — Imagem final (para AWS Lambda)
 FROM public.ecr.aws/lambda/java:21
 
-# Copia o JAR para o local correto
-COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/lib/app.jar
+# Copia o JAR para o diretório padrão do Lambda
+COPY --from=build /app/target/service-0.0.1-SNAPSHOT.jar ${LAMBDA_TASK_ROOT}/app.jar
 
-# Define o handler da função
+# Define o handler
 ENV _HANDLER=com.service.config.handler.StreamLambdaHandler
 
-# Comando padrão
-CMD ["lib/app.jar"]
+# Executa via Spring Boot Loader
+CMD ["org.springframework.boot.loader.launch.JarLauncher"]
+
 
 
 
