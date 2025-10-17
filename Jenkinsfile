@@ -57,10 +57,59 @@ pipeline {
             }
         }
 
+        stage('Prepare Lambda image (explode jar in pipeline)') {
+            steps {
+                echo '⚙️ Preparando contexto da imagem Lambda (explode JAR e copia classes/libs para lambda-image/)'
+                sh '''
+                set -e
+
+                # paths and names
+                JAR=target/service-0.0.1-SNAPSHOT.jar
+                CONTEXT=lambda-image
+
+                rm -rf ${CONTEXT}
+                mkdir -p ${CONTEXT}
+
+                if [ ! -f "${JAR}" ]; then
+                    echo "JAR não encontrado: ${JAR}"
+                    exit 1
+                fi
+
+                # explode jar to temp and copy classes/libs to context
+                rm -rf tmp_explode || true
+                mkdir -p tmp_explode
+                cd tmp_explode
+                jar xf ../${JAR}
+
+                if [ -d BOOT-INF/classes ]; then
+                    cp -r BOOT-INF/classes/* ../${CONTEXT}/
+                fi
+
+                if [ -d BOOT-INF/lib ]; then
+                    cp -r BOOT-INF/lib/* ../${CONTEXT}/
+                fi
+
+                cd ..
+
+                # create minimal Dockerfile for AWS Lambda image
+                cat > ${CONTEXT}/Dockerfile <<'EOF'
+                FROM public.ecr.aws/lambda/java:21
+
+                COPY . /var/task
+
+                ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
+
+                EOF
+
+                rm -rf tmp_explode
+                '''
+            }
+        }
+
         stage('Build Docker Image') {
             steps {
                 script {
-                   sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} ."
+                   sh "docker build -t ${ECR_REPO}:${IMAGE_TAG} lambda-image"
                 }
             }
         }
