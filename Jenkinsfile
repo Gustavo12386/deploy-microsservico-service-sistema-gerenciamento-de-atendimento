@@ -295,7 +295,7 @@ JAVA
                         echo "🔍 Digest encontrado: ${digest}"
 
                         if (!digest || digest == 'None') {
-                            error("❌ Não foi possível obter o digest da imagem no ECR. Aborting.")
+                            error(" Não foi possível obter o digest da imagem no ECR. Aborting.")
                         }
 
                         def imageWithDigest = "${ECR_URI}@${digest}"
