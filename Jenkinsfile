@@ -80,7 +80,7 @@ pipeline {
 
                     echo "▶️ Tentando inicializar o handler via Spring Boot Loader..."
                     docker run --rm --entrypoint /bin/sh microsservico-atendimento:latest -c '
-                        java -cp /var/task/app.jar org.springframework.boot.loader.launch.JarLauncher --help > /dev/null 2>&1 &&
+                        java -cp /var/task/lib/app.jar org.springframework.boot.loader.launch.JarLauncher --help > /dev/null 2>&1 &&
                         echo "✅ Handler carregado com sucesso via Spring Boot Loader!" ||
                         echo "⚠️ Falha ao inicializar o handler (verifique o classpath ou a estrutura do JAR)."
                     '
