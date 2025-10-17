@@ -9,8 +9,7 @@ pipeline {
         IMAGE_TAG = 'latest'
         ROLE_ARN = 'arn:aws:iam::381492003133:role/lambda-deploy-role'
         LAMBDA_FUNCTION = 'microsservico-atendimento'
-        PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"
-        AWS_LAMBDA_HANDLER = 'com.service.config.handler.StreamLambdaHandler'
+        PATH = "/var/lib/jenkins/.local/bin:${env.PATH}"        
     }
 
     stages {
@@ -36,8 +35,7 @@ pipeline {
         stage('Verificar StreamLambdaHandler no JAR') {
             steps {
                 echo '🔎 Verificando se a classe StreamLambdaHandler foi empacotada...'
-                script {
-                    // Testa se a classe existe dentro do JAR
+                script {                    
                     def result = sh(
                         script: '''
                             docker run --rm \
