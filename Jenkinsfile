@@ -301,7 +301,7 @@ JAVA
                         def imageWithDigest = "${ECR_URI}@${digest}"
                         echo "🚀 Atualizando função Lambda ${LAMBDA_FUNCTION} para usar a imagem com digest: ${imageWithDigest}"
 
-                        // exportar digest e imageWithDigest para o ambiente para uso em stages posteriores
+                       
                         env.IMAGE_DIGEST = digest
                         env.IMAGE_WITH_DIGEST = imageWithDigest
 
