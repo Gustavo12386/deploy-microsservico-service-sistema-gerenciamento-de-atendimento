@@ -307,7 +307,7 @@ JAVA
 
                         sh "aws lambda update-function-code --function-name ${LAMBDA_FUNCTION} --image-uri ${imageWithDigest} --region ${AWS_REGION}"
 
-                        echo "⚙️ Atualizando configuração da função: memória=${LAMBDA_MEMORY}MB timeout=${LAMBDA_TIMEOUT}s"
+                        echo " Atualizando configuração da função: memória=${LAMBDA_MEMORY}MB timeout=${LAMBDA_TIMEOUT}s"
                         sh "aws lambda update-function-configuration --function-name ${LAMBDA_FUNCTION} --memory-size ${LAMBDA_MEMORY} --timeout ${LAMBDA_TIMEOUT} --region ${AWS_REGION}"
                     }
                 }
