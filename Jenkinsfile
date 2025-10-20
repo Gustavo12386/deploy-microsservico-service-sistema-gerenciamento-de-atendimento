@@ -212,12 +212,12 @@ JAVA
         stage('Testar Execução do Handler no Container') {
             steps {
                 echo '🧪 Testando execução do StreamLambdaHandler dentro do container...'
-                sh """
+                sh '''
                     docker run --rm --entrypoint /bin/sh ${ECR_REPO}:${IMAGE_TAG} -c "
                         echo '▶️ Verificando se o container exige o handler como argumento (entrypoint) e exibe a eficiência do CMD...' &&
                         echo 'Entrypoint and CMD:' && ps aux || true
                     "
-                """
+                '''
             }
         }
 
@@ -387,7 +387,7 @@ JAVA
                         def deployImage = env.IMAGE_WITH_DIGEST ?: "${ECR_URI}:${IMAGE_TAG}"
                         echo "🚀 Criando ou atualizando função Lambda '${LAMBDA_FUNCTION}' com imagem '${deployImage}'..."
 
-                        sh """
+                        sh '''
                         # Usando as variáveis de ambiente no sh
                         if aws lambda get-function --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} >/dev/null 2>&1; then
                             echo "🔁 Função já existe — atualizando imagem..."
@@ -395,18 +395,18 @@ JAVA
                                                         MAX_WAIT=600
                                                         SLEEP=5
                                                         ELAPSED=0
-                                                        echo "⏳ Waiting for any existing Lambda update to finish (max \$MAX_WAIT s)..."
-                                                        while [ \$ELAPSED -lt \$MAX_WAIT ]; do
+                                                        echo "⏳ Waiting for any existing Lambda update to finish (max $MAX_WAIT s)..."
+                                                        while [ $ELAPSED -lt $MAX_WAIT ]; do
                                                             status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                                            echo "Lambda LastUpdateStatus=\$status"
-                                                            if [ "\$status" != "InProgress" ]; then
+                                                            echo "Lambda LastUpdateStatus=$status"
+                                                            if [ "$status" != "InProgress" ]; then
                                                                 break
                                                             fi
-                                                            sleep \$SLEEP
-                                                            ELAPSED=\$((ELAPSED + SLEEP))
+                                                            sleep $SLEEP
+                                                            ELAPSED=$((ELAPSED + SLEEP))
                                                         done
-                                                        if [ \$ELAPSED -ge \$MAX_WAIT ]; then
-                                                            echo "❌ Timeout waiting for existing Lambda update to finish after \$MAX_WAIT s"
+                                                        if [ $ELAPSED -ge $MAX_WAIT ]; then
+                                                            echo "❌ Timeout waiting for existing Lambda update to finish after $MAX_WAIT s"
                                                             exit 1
                                                         fi
 
@@ -424,7 +424,7 @@ JAVA
                                 --role ${ROLE_ARN} \
                                 --region ${AWS_REGION}
                         fi
-                        """
+                        '''
 
                         echo "✅ Função Lambda criada ou atualizada com sucesso!"
                     }
