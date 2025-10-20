@@ -315,7 +315,7 @@ JAVA
                                                 echo "⏳ Waiting for any existing Lambda update to finish (max ${MAX_WAIT}s)..."
                                                 while [ $ELAPSED -lt $MAX_WAIT ]; do
                                                     status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                                    echo "Lambda LastUpdateStatus=${status}"
+                                                    echo "Lambda LastUpdateStatus=\$status"
                                                     if [ "$status" != "InProgress" ]; then
                                                         break
                                                     fi
@@ -337,39 +337,39 @@ JAVA
                                                 MAX_WAIT=600
                                                 SLEEP=5
                                                 ELAPSED=0
-                                                echo "⏳ Waiting for update-function-code to finish (max ${MAX_WAIT}s)..."
-                                                while [ $ELAPSED -lt $MAX_WAIT ]; do
+                                                echo "⏳ Waiting for update-function-code to finish (max \$MAX_WAIT s)..."
+                                                while [ \$ELAPSED -lt \$MAX_WAIT ]; do
                                                     status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                                    echo "Lambda LastUpdateStatus=${status}"
-                                                    if [ "$status" != "InProgress" ]; then
+                                                    echo "Lambda LastUpdateStatus=\$status"
+                                                    if [ "\$status" != "InProgress" ]; then
                                                         break
                                                     fi
-                                                    sleep $SLEEP
-                                                    ELAPSED=$((ELAPSED + SLEEP))
+                                                    sleep \$SLEEP
+                                                    ELAPSED=\$((ELAPSED + SLEEP))
                                                 done
 
-                                                if [ $ELAPSED -ge $MAX_WAIT ]; then
-                                                    echo "❌ Timeout waiting for update-function-code to finish after ${MAX_WAIT}s"
+                                                if [ \$ELAPSED -ge \$MAX_WAIT ]; then
+                                                    echo "❌ Timeout waiting for update-function-code to finish after \$MAX_WAIT s"
                                                     exit 1
                                                 fi
 
                                                 # retry update-function-configuration on conflict
                                                 RETRIES=5
-                                                for i in $(seq 1 $RETRIES); do
-                                                    echo "Attempt $i to update function configuration..."
+                                                for i in $(seq 1 \$RETRIES); do
+                                                    echo "Attempt \$i to update function configuration..."
                                                     set +e
                                                     aws lambda update-function-configuration --function-name ${LAMBDA_FUNCTION} --memory-size ${LAMBDA_MEMORY} --timeout ${LAMBDA_TIMEOUT} --region ${AWS_REGION}
                                                     rc=$?
                                                     set -e
-                                                    if [ $rc -eq 0 ]; then
+                                                    if [ \$rc -eq 0 ]; then
                                                         echo "✅ update-function-configuration succeeded"
                                                         break
                                                     fi
-                                                    echo "⚠️ update-function-configuration failed with rc=$rc; will retry after backoff"
-                                                    sleep $((i * 5))
-                                                    if [ $i -eq $RETRIES ]; then
+                                                    echo "⚠️ update-function-configuration failed with rc=\$rc; will retry after backoff"
+                                                    sleep \$((\$i * 5))
+                                                    if [ \$i -eq \$RETRIES ]; then
                                                         echo "❌ All retries failed"
-                                                        exit $rc
+                                                        exit \$rc
                                                     fi
                                                 done
                                                 '''
@@ -395,18 +395,18 @@ JAVA
                                                         MAX_WAIT=600
                                                         SLEEP=5
                                                         ELAPSED=0
-                                                        echo "⏳ Waiting for any existing Lambda update to finish (max ${MAX_WAIT}s)..."
-                                                        while [ $ELAPSED -lt $MAX_WAIT ]; do
+                                                        echo "⏳ Waiting for any existing Lambda update to finish (max \$MAX_WAIT s)..."
+                                                        while [ \$ELAPSED -lt \$MAX_WAIT ]; do
                                                             status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                                            echo "Lambda LastUpdateStatus=${status}"
-                                                            if [ "$status" != "InProgress" ]; then
+                                                            echo "Lambda LastUpdateStatus=\$status"
+                                                            if [ "\$status" != "InProgress" ]; then
                                                                 break
                                                             fi
-                                                            sleep $SLEEP
-                                                            ELAPSED=$((ELAPSED + SLEEP))
+                                                            sleep \$SLEEP
+                                                            ELAPSED=\$((ELAPSED + SLEEP))
                                                         done
-                                                        if [ $ELAPSED -ge $MAX_WAIT ]; then
-                                                            echo "❌ Timeout waiting for existing Lambda update to finish after ${MAX_WAIT}s"
+                                                        if [ \$ELAPSED -ge \$MAX_WAIT ]; then
+                                                            echo "❌ Timeout waiting for existing Lambda update to finish after \$MAX_WAIT s"
                                                             exit 1
                                                         fi
 
