@@ -23,7 +23,7 @@ pipeline {
 
          stage('Build JAR com Maven') {
             steps {
-                echo '🔨 Compilando projeto e empacotando JAR...'
+                echo 'Compilando projeto e empacotando JAR...'
                 sh '''
                 docker run --rm \
                     -v $(pwd):/app \
