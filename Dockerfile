@@ -30,7 +30,6 @@ RUN cd ${LAMBDA_TASK_ROOT} && \
 # Define o handler no formato esperado (Class::method)
 ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
 
-# Não sobrescrever o ENTRYPOINT padrão da imagem base; o runtime usará _HANDLER
 
 
 
