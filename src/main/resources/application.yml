@@ -6,7 +6,7 @@ spring:
     name: service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/atendimentodb
+    url: jdbc:postgresql://127.0.0.1:5432/atendimentodb
     username: calderarogustavo
     password: Gusang_20011
 
@@ -17,7 +17,7 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: 127.0.0.1:9092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
@@ -29,7 +29,7 @@ eureka:
   client:
     enabled: true
     service-url:
-      defaultZone: http://localhost:8761/eureka/
+      defaultZone: http://127.0.0.1:8761/eureka/
   instance:
     instance-id: ${random.value}
     prefer-ip-address: true
