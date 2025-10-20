@@ -387,44 +387,46 @@ JAVA
                         def deployImage = env.IMAGE_WITH_DIGEST ?: "${ECR_URI}:${IMAGE_TAG}"
                         echo "🚀 Criando ou atualizando função Lambda '${LAMBDA_FUNCTION}' com imagem '${deployImage}'..."
 
-                        sh '''
-                        # Usando as variáveis de ambiente no sh
+                        // First perform the existence check and wait using a shell script (returns a marker)
+                        def checkResult = sh(returnStdout: true, script: '''
                         if aws lambda get-function --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} >/dev/null 2>&1; then
-                            echo "🔁 Função já existe — atualizando imagem..."
-                                                        # Wait for any ongoing update to finish
-                                                        MAX_WAIT=600
-                                                        SLEEP=5
-                                                        ELAPSED=0
-                                                        echo "⏳ Waiting for any existing Lambda update to finish (max $MAX_WAIT s)..."
-                                                        while [ $ELAPSED -lt $MAX_WAIT ]; do
-                                                            status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                                            echo "Lambda LastUpdateStatus=$status"
-                                                            if [ "$status" != "InProgress" ]; then
-                                                                break
-                                                            fi
-                                                            sleep $SLEEP
-                                                            ELAPSED=$((ELAPSED + SLEEP))
-                                                        done
-                                                        if [ $ELAPSED -ge $MAX_WAIT ]; then
-                                                            echo "❌ Timeout waiting for existing Lambda update to finish after $MAX_WAIT s"
-                                                            exit 1
-                                                        fi
-
-                                                        aws lambda update-function-code \
-                                                                --function-name ${LAMBDA_FUNCTION} \
-                                                                --image-uri ${deployImage} \
-                                                                --region ${AWS_REGION}
+                            echo "EXISTS"
                         else
-                            echo "🆕 Criando nova função Lambda..."
-                            aws lambda create-function \
-                                --function-name ${LAMBDA_FUNCTION} \
-                                --package-type Image \
-
-                                --code ImageUri=${deployImage} \
-                                --role ${ROLE_ARN} \
-                                --region ${AWS_REGION}
+                            echo "MISSING"
                         fi
-                        '''
+                        ''').trim()
+
+                        if (checkResult == 'EXISTS') {
+                            echo "🔁 Função já existe — atualizando imagem..."
+
+                            // Wait for any ongoing update to finish (shell) before updating code
+                            sh '''
+                                MAX_WAIT=600
+                                SLEEP=5
+                                ELAPSED=0
+                                echo "⏳ Waiting for any existing Lambda update to finish (max $MAX_WAIT s)..."
+                                while [ $ELAPSED -lt $MAX_WAIT ]; do
+                                    status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
+                                    echo "Lambda LastUpdateStatus=$status"
+                                    if [ "$status" != "InProgress" ]; then
+                                        break
+                                    fi
+                                    sleep $SLEEP
+                                    ELAPSED=$((ELAPSED + SLEEP))
+                                done
+                                if [ $ELAPSED -ge $MAX_WAIT ]; then
+                                    echo "❌ Timeout waiting for existing Lambda update to finish after $MAX_WAIT s"
+                                    exit 1
+                                fi
+                            '''
+
+                            // Now update using Groovy-interpolated deployImage so the shell receives the proper URI
+                            sh "aws lambda update-function-code --function-name ${LAMBDA_FUNCTION} --image-uri ${deployImage} --region ${AWS_REGION}"
+                        } else {
+                            echo "🆕 Criando nova função Lambda..."
+                            // Create must also interpolate deployImage from Groovy
+                            sh "aws lambda create-function --function-name ${LAMBDA_FUNCTION} --package-type Image --code ImageUri=${deployImage} --role ${ROLE_ARN} --region ${AWS_REGION}"
+                        }
 
                         echo "✅ Função Lambda criada ou atualizada com sucesso!"
                     }
