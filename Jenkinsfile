@@ -286,156 +286,189 @@ JAVA
             }
         }
         
-        stage('Update Lambda with image digest and config') {
-            steps {
-                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-                    script {
-                        echo '🔁 Obtendo digest da imagem no ECR e atualizando Lambda (imagem imutável + config)'
-                        def digest = sh(returnStdout: true, script: "aws ecr describe-images --repository-name ${ECR_REPO} --image-ids imageTag=${IMAGE_TAG} --region ${AWS_REGION} --query 'imageDetails[0].imageDigest' --output text").trim()
-                        echo "🔍 Digest encontrado: ${digest}"
+  stage('Update Lambda with image digest and config') {
+    steps {
+        withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+            script {
+                echo '🔁 Obtendo digest da imagem no ECR e atualizando Lambda (imagem imutável + config)'
+                
+                // Obter o digest da imagem
+                def digest = sh(
+                    returnStdout: true, 
+                    script: """
+                        aws ecr describe-images \
+                            --repository-name ${ECR_REPO} \
+                            --image-ids imageTag=${IMAGE_TAG} \
+                            --region ${AWS_REGION} \
+                            --query 'imageDetails[0].imageDigest' \
+                            --output text
+                    """
+                ).trim()
+                
+                echo "🔍 Digest encontrado: ${digest}"
 
-                        if (!digest || digest == 'None') {
-                            error(" Não foi possível obter o digest da imagem no ECR. Aborting.")
-                        }
-
-                        def imageWithDigest = "${ECR_URI}@${digest}"
-                        echo "🚀 Atualizando função Lambda ${LAMBDA_FUNCTION} para usar a imagem com digest: ${imageWithDigest}"
-
-                       
-                        env.IMAGE_DIGEST = digest
-                        env.IMAGE_WITH_DIGEST = imageWithDigest
-
-                                                sh '''
-                                                set -e
-
-                                                # Wait for any ongoing update to finish to avoid ResourceConflictException
-                                                MAX_WAIT=600
-                                                SLEEP=5
-                                                ELAPSED=0
-                                                echo "⏳ Waiting for any existing Lambda update to finish (max ${MAX_WAIT}s)..."
-                                                while [ $ELAPSED -lt $MAX_WAIT ]; do
-                                                    status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                                    echo "Lambda LastUpdateStatus=\$status"
-                                                    if [ "$status" != "InProgress" ]; then
-                                                        break
-                                                    fi
-                                                    sleep $SLEEP
-                                                    ELAPSED=$((ELAPSED + SLEEP))
-                                                done
-                                                if [ $ELAPSED -ge $MAX_WAIT ]; then
-                                                    echo "❌ Timeout waiting for existing Lambda update to finish after ${MAX_WAIT}s"
-                                                    exit 1
-                                                fi
-
-                                                aws lambda update-function-code --function-name ${LAMBDA_FUNCTION} --image-uri ${imageWithDigest} --region ${AWS_REGION}
-                                                '''
-
-                                                echo "⚙️ Atualizando configuração da função: memória=${LAMBDA_MEMORY}MB timeout=${LAMBDA_TIMEOUT}s"
-                                                sh '''
-                                                set -e
-
-                                                MAX_WAIT=600
-                                                SLEEP=5
-                                                ELAPSED=0
-                                                echo "⏳ Waiting for update-function-code to finish (max \$MAX_WAIT s)..."
-                                                while [ \$ELAPSED -lt \$MAX_WAIT ]; do
-                                                    status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                                    echo "Lambda LastUpdateStatus=\$status"
-                                                    if [ "\$status" != "InProgress" ]; then
-                                                        break
-                                                    fi
-                                                    sleep \$SLEEP
-                                                    ELAPSED=\$((ELAPSED + SLEEP))
-                                                done
-
-                                                if [ \$ELAPSED -ge \$MAX_WAIT ]; then
-                                                    echo "❌ Timeout waiting for update-function-code to finish after \$MAX_WAIT s"
-                                                    exit 1
-                                                fi
-
-                                                # retry update-function-configuration on conflict
-                                                RETRIES=5
-                                                for i in $(seq 1 \$RETRIES); do
-                                                    echo "Attempt \$i to update function configuration..."
-                                                    set +e
-                                                    aws lambda update-function-configuration --function-name ${LAMBDA_FUNCTION} --memory-size ${LAMBDA_MEMORY} --timeout ${LAMBDA_TIMEOUT} --region ${AWS_REGION}
-                                                    rc=$?
-                                                    set -e
-                                                    if [ \$rc -eq 0 ]; then
-                                                        echo "✅ update-function-configuration succeeded"
-                                                        break
-                                                    fi
-                                                    echo "⚠️ update-function-configuration failed with rc=\$rc; will retry after backoff"
-                                                    sleep \$((\$i * 5))
-                                                    if [ \$i -eq \$RETRIES ]; then
-                                                        echo "❌ All retries failed"
-                                                        exit \$rc
-                                                    fi
-                                                done
-                                                '''
-                    }
+                if (!digest || digest == 'None') {
+                    error("❌ Não foi possível obter o digest da imagem no ECR. Abortando.")
                 }
+
+                def imageWithDigest = "${ECR_URI}@${digest}"
+                echo "🚀 Atualizando função Lambda ${LAMBDA_FUNCTION} para usar a imagem com digest: ${imageWithDigest}"
+
+                // Fazer o update da função Lambda
+                sh """
+                    set -e
+
+                    # Wait for any ongoing update to finish
+                    MAX_WAIT=600
+                    SLEEP=5
+                    ELAPSED=0
+                    echo "⏳ Waiting for any existing Lambda update to finish (max \\$MAX_WAIT s)..."
+                    
+                    while [ \\$ELAPSED -lt \\$MAX_WAIT ]; do
+                        status=\$(aws lambda get-function-configuration \
+                            --function-name ${LAMBDA_FUNCTION} \
+                            --region ${AWS_REGION} \
+                            --query 'LastUpdateStatus' \
+                            --output text)
+                        echo "Lambda LastUpdateStatus=\\$status"
+                        if [ "\\$status" != "InProgress" ]; then
+                            break
+                        fi
+                        sleep \\$SLEEP
+                        ELAPSED=\\$((ELAPSED + SLEEP))
+                    done
+                    
+                    if [ \\$ELAPSED -ge \\$MAX_WAIT ]; then
+                        echo "❌ Timeout waiting for existing Lambda update to finish after \\$MAX_WAIT s"
+                        exit 1
+                    fi
+
+                    # Atualizar o código da função com a imagem
+                    echo "📦 Atualizando função Lambda com nova imagem..."
+                    aws lambda update-function-code \
+                        --function-name ${LAMBDA_FUNCTION} \
+                        --image-uri ${imageWithDigest} \
+                        --region ${AWS_REGION}
+
+                    echo "✅ Update-function-code concluído com sucesso!"
+                """
+
+                // Aguardar o update do código terminar antes de atualizar a configuração
+                sh """
+                    set -e
+                    
+                    MAX_WAIT=600
+                    SLEEP=5
+                    ELAPSED=0
+                    echo "⏳ Aguardando update-function-code finalizar (max \\$MAX_WAIT s)..."
+                    
+                    while [ \\$ELAPSED -lt \\$MAX_WAIT ]; do
+                        status=\$(aws lambda get-function-configuration \
+                            --function-name ${LAMBDA_FUNCTION} \
+                            --region ${AWS_REGION} \
+                            --query 'LastUpdateStatus' \
+                            --output text)
+                        echo "Lambda LastUpdateStatus=\\$status"
+                        if [ "\\$status" = "Successful" ]; then
+                            break
+                        elif [ "\\$status" = "Failed" ]; then
+                            echo "❌ Lambda update failed"
+                            exit 1
+                        fi
+                        sleep \\$SLEEP
+                        ELAPSED=\\$((ELAPSED + SLEEP))
+                    done
+
+                    if [ \\$ELAPSED -ge \\$MAX_WAIT ]; then
+                        echo "❌ Timeout waiting for update-function-code to finish after \\$MAX_WAIT s"
+                        exit 1
+                    fi
+
+                    echo "⚙️ Atualizando configuração da função: memória=${LAMBDA_MEMORY}MB timeout=${LAMBDA_TIMEOUT}s"
+                    
+                    # Tentar atualizar a configuração com retry
+                    RETRIES=5
+                    for i in \\$(seq 1 \\$RETRIES); do
+                        echo "Tentativa \\$i de atualizar configuração da função..."
+                        if aws lambda update-function-configuration \
+                            --function-name ${LAMBDA_FUNCTION} \
+                            --memory-size ${LAMBDA_MEMORY} \
+                            --timeout ${LAMBDA_TIMEOUT} \
+                            --region ${AWS_REGION}; then
+                            echo "✅ update-function-configuration bem-sucedido"
+                            break
+                        else
+                            echo "⚠️ update-function-configuration falhou na tentativa \\$i"
+                            if [ \\$i -eq \\$RETRIES ]; then
+                                echo "❌ Todas as tentativas falharam"
+                                exit 1
+                            fi
+                            sleep \\$((\\$i * 5))
+                        fi
+                    done
+                """
             }
         }
-
-       stage('Create Lambda Function') {
-            steps {
-                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-                    script {
-                       
-
-                        def deployImage = env.IMAGE_WITH_DIGEST ?: "${ECR_URI}:${IMAGE_TAG}"
-                        echo "🚀 Criando ou atualizando função Lambda '${LAMBDA_FUNCTION}' com imagem '${deployImage}'..."
-
-                        // First perform the existence check and wait using a shell script (returns a marker)
-                        def checkResult = sh(returnStdout: true, script: '''
-                        if aws lambda get-function --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} >/dev/null 2>&1; then
-                            echo "EXISTS"
-                        else
-                            echo "MISSING"
-                        fi
-                        ''').trim()
-
-                        if (checkResult == 'EXISTS') {
-                            echo "🔁 Função já existe — atualizando imagem..."
-
-                            // Wait for any ongoing update to finish (shell) before updating code
-                            sh '''
-                                MAX_WAIT=600
-                                SLEEP=5
-                                ELAPSED=0
-                                echo "⏳ Waiting for any existing Lambda update to finish (max $MAX_WAIT s)..."
-                                while [ $ELAPSED -lt $MAX_WAIT ]; do
-                                    status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
-                                    echo "Lambda LastUpdateStatus=$status"
-                                    if [ "$status" != "InProgress" ]; then
-                                        break
-                                    fi
-                                    sleep $SLEEP
-                                    ELAPSED=$((ELAPSED + SLEEP))
-                                done
-                                if [ $ELAPSED -ge $MAX_WAIT ]; then
-                                    echo "❌ Timeout waiting for existing Lambda update to finish after $MAX_WAIT s"
-                                    exit 1
-                                fi
-                            '''
-
-                            // Now update using Groovy-interpolated deployImage so the shell receives the proper URI
-                            sh "aws lambda update-function-code --function-name ${LAMBDA_FUNCTION} --image-uri ${deployImage} --region ${AWS_REGION}"
-                        } else {
-                            echo "🆕 Criando nova função Lambda..."
-                            // Create must also interpolate deployImage from Groovy
-                            sh "aws lambda create-function --function-name ${LAMBDA_FUNCTION} --package-type Image --code ImageUri=${deployImage} --role ${ROLE_ARN} --region ${AWS_REGION}"
-                        }
-
-                        echo "✅ Função Lambda criada ou atualizada com sucesso!"
-                    }
-                }
-            }
-        }        
-
-        
     }
+}
+
+//       stage('Create Lambda Function') {
+//            steps {
+//                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+//                    script {
+//                       
+//
+//                        def deployImage = env.IMAGE_WITH_DIGEST ?: "${ECR_URI}:${IMAGE_TAG}"
+//                        echo "🚀 Criando ou atualizando função Lambda '${LAMBDA_FUNCTION}' com imagem '${deployImage}'..."
+//
+//                       
+//                        def checkResult = sh(returnStdout: true, script: '''
+//                        if aws lambda get-function --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} >/dev/null 2>&1; then
+//                            echo "EXISTS"
+//                        else
+//                            echo "MISSING"
+//                        fi
+//                        ''').trim()
+//
+//                        if (checkResult == 'EXISTS') {
+//                            echo "🔁 Função já existe — atualizando imagem..."
+//
+//                            
+//                            sh '''
+//                                MAX_WAIT=600
+//                                SLEEP=5
+//                                ELAPSED=0
+//                                echo "⏳ Waiting for any existing Lambda update to finish (max $MAX_WAIT s)..."
+//                                while [ $ELAPSED -lt $MAX_WAIT ]; do
+//                                    status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
+//                                    echo "Lambda LastUpdateStatus=$status"
+//                                    if [ "$status" != "InProgress" ]; then
+//                                        break
+//                                    fi
+//                                    sleep $SLEEP
+//                                    ELAPSED=$((ELAPSED + SLEEP))
+//                                done
+//                                if [ $ELAPSED -ge $MAX_WAIT ]; then
+//                                    echo "❌ Timeout waiting for existing Lambda update to finish after $MAX_WAIT s"
+//                                    exit 1
+//                                fi
+//                            '''
+//
+//                           
+//                            sh "aws lambda update-function-code --function-name ${LAMBDA_FUNCTION} --image-uri ${deployImage} --region ${AWS_REGION}"
+//                        } else {
+//                            echo "🆕 Criando nova função Lambda..."                            
+//                            sh "aws lambda create-function --function-name ${LAMBDA_FUNCTION} --package-type Image --code ImageUri=${deployImage} --role ${ROLE_ARN} --region ${AWS_REGION}"
+//                        }
+//
+//                        echo "✅ Função Lambda criada ou atualizada com sucesso!"
+//                    }
+//                }
+//            }
+//        }        
+//
+//        
+//    }
 
     post {
         success {
