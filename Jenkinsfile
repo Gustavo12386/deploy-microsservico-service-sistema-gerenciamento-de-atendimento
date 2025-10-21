@@ -132,7 +132,9 @@ EOF
                    echo "\n>>> Conteúdo de lambda-image/lib (dependências) >>>"
                    ls -la lambda-image/lib || echo 'lambda-image/lib não existe'
                    echo "\n>>> Iniciando docker build... >>>"
-                   docker build -t ${ECR_REPO}:${IMAGE_TAG} lambda-image
+                   # Build for a single platform (linux/amd64) so ECR receives a single-arch manifest
+                   # AWS Lambda expects a single-platform image manifest (not a multi-arch manifest list)
+                   DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -t ${ECR_REPO}:${IMAGE_TAG} lambda-image
                    '''
                 }
             }
@@ -277,10 +279,25 @@ JAVA
             steps {
                 script {
                     sh '''
+                    # Tag and push the single-arch image to ECR
                     docker tag ${ECR_REPO}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
                     docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
                     echo "⏳ Aguardando propagação da imagem no ECR..."
                     sleep 15
+
+                    # Inspect the manifest in the registry and save to manifest.json for validation
+                    echo '--- docker manifest inspect (remote) ---'
+                    docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
+                    echo '--- manifest.json ---'
+                    cat manifest.json || true
+
+                    # Validate manifest: fail if it's a manifest list or OCI index (multi-arch)
+                    # Detection heuristics: presence of "manifests" array OR mediaType indicating index/list
+                    if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
+                        echo "\n❌ Detected a multi-arch/OCI index manifest. AWS Lambda requires a single-arch image manifest (application/vnd.docker.distribution.manifest.v2+json)."
+                        echo "Please rebuild the image using: docker build --platform linux/amd64 ... and push again."
+                        exit 2
+                    fi
                     '''
                 }
             }
