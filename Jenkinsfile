@@ -143,7 +143,7 @@ EOF
                    echo "\n>>> Conteúdo de lambda-image/lib (dependências) >>>"
                    ls -la lambda-image/lib || echo 'lambda-image/lib não existe'
                    echo "\n>>> Iniciando docker build... >>>"
-                   docker build -t ${ECR_REPO}:${IMAGE_TAG} lambda-image
+                   docker build --format docker -t ${ECR_REPO}:${IMAGE_TAG} lambda-image
                    '''
                 }
             }
