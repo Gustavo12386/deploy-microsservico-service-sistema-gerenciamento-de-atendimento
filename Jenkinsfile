@@ -279,7 +279,7 @@ JAVA
             steps {
                 script {
                     sh '''
-                    # Tag and push the single-arch image to ECR
+                    # Tag and push the image to ECR
                     docker tag ${ECR_REPO}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
                     docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
                     echo "⏳ Aguardando propagação da imagem no ECR..."
@@ -291,12 +291,30 @@ JAVA
                     echo '--- manifest.json ---'
                     cat manifest.json || true
 
-                    # Validate manifest: fail if it's a manifest list or OCI index (multi-arch)
-                    # Detection heuristics: presence of "manifests" array OR mediaType indicating index/list
+                    # Validate manifest: detect if it's a manifest list or OCI index (multi-arch)
                     if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
                         echo "\n❌ Detected a multi-arch/OCI index manifest. AWS Lambda requires a single-arch image manifest (application/vnd.docker.distribution.manifest.v2+json)."
-                        echo "Please rebuild the image using: docker build --platform linux/amd64 ... and push again."
-                        exit 2
+                        echo "Attempting an automatic rebuild (one attempt) with --platform linux/amd64 and re-push..."
+
+                        # Rebuild explicitly for linux/amd64 and repush
+                        DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -t ${ECR_REPO}:${IMAGE_TAG} lambda-image || true
+                        docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                        docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                        echo "⏳ Aguardando propagação da imagem repush no ECR..."
+                        sleep 15
+
+                        # Re-inspect manifest
+                        docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
+                        echo '--- manifest.json after auto-rebuild ---'
+                        cat manifest.json || true
+
+                        # If still a manifest list / index, fail explicitly with a helpful message
+                        if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
+                            echo "\n❌ Automatic rebuild did not produce a single-arch manifest. Please build on an amd64 host or ensure builder doesn't create multi-arch manifests."
+                            exit 2
+                        else
+                            echo "✅ Auto-rebuild produced acceptable manifest. Proceeding."
+                        fi
                     fi
                     '''
                 }
