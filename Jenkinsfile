@@ -57,29 +57,65 @@ pipeline {
             }
         }
 
-        stage('Prepare Lambda image (Dockerfile compatível)') {
+         stage('Prepare Lambda image (explode jar in pipeline)') {
             steps {
-                echo '⚙️ Preparando Dockerfile compatível com AWS Lambda'
+                echo '⚙️ Preparando contexto da imagem Lambda (explode JAR e copia classes/libs para lambda-image/)'
                 sh '''
                 set -e
+
+                # paths and names
                 JAR=target/service-0.0.1-SNAPSHOT.jar
                 CONTEXT=lambda-image
-                
+
                 rm -rf ${CONTEXT}
                 mkdir -p ${CONTEXT}
-                
-                # Copiar o JAR
+
+                if [ ! -f "${JAR}" ]; then
+                    echo "JAR não encontrado: ${JAR}"
+                    exit 1
+                fi
+
+                # copy the fat/executable jar to the lambda image context (kept for reference)
                 cp "${JAR}" ${CONTEXT}/app.jar
-                
-                # Criar Dockerfile usando echo (método mais confiável)
-                echo "# Imagem base Lambda Java" > ${CONTEXT}/Dockerfile
-                echo "FROM public.ecr.aws/lambda/java:21" >> ${CONTEXT}/Dockerfile
-                echo "" >> ${CONTEXT}/Dockerfile
-                echo "# Copiar o JAR" >> ${CONTEXT}/Dockerfile
-                echo "COPY app.jar \\${LAMBDA_TASK_ROOT}" >> ${CONTEXT}/Dockerfile
-                echo "" >> ${CONTEXT}/Dockerfile
-                echo "# Handler Lambda" >> ${CONTEXT}/Dockerfile
-                echo 'CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]' >> ${CONTEXT}/Dockerfile
+
+                # Explode the fat jar and move BOOT-INF/classes -> ${CONTEXT}/
+                # and BOOT-INF/lib -> ${CONTEXT}/lib so the Lambda base image
+                # runtime will find classes under /var/task and dependency jars under /var/task/lib
+                mkdir -p ${CONTEXT}/lib
+                mkdir -p explode_tmp
+                (cd explode_tmp && jar xf ../${JAR})
+                # Move classes (if present)
+                if [ -d explode_tmp/BOOT-INF/classes ]; then
+                    mkdir -p ${CONTEXT}
+                    cp -a explode_tmp/BOOT-INF/classes/. ${CONTEXT}/ || true
+                fi
+                # Move dependency jars
+                if [ -d explode_tmp/BOOT-INF/lib ]; then
+                    mkdir -p ${CONTEXT}/lib
+                    cp -a explode_tmp/BOOT-INF/lib/. ${CONTEXT}/lib/ || true
+                fi
+                rm -rf explode_tmp
+
+                # create Dockerfile that keeps handler as the single CMD argument so
+                # /lambda-entrypoint.sh sets _HANDLER and the base runtime loads classes
+                cat > ${CONTEXT}/Dockerfile <<'EOF'
+FROM public.ecr.aws/lambda/java:21
+
+# Copy the fat jar (Spring Boot executable jar) for reference
+COPY app.jar /var/task/app.jar
+
+# Copy exploded classes and libs from the build context into the image
+# This will place BOOT-INF/classes content at /var/task and BOOT-INF/lib jars at /var/task/lib
+COPY . /var/task/
+
+# Tell the Lambda runtime which handler to use (entrypoint expects a single argument)
+ENV _HANDLER=com.service.config.handler.StreamLambdaHandler::handleRequest
+
+## Use the base image entrypoint (/lambda-entrypoint.sh). Provide only the handler
+# as CMD so the Lambda runtime sets up the process correctly and loads classes
+# from /var/task and /var/task/lib (we previously exploded the jar into these paths).
+CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]
+EOF
                 '''
             }
         }
@@ -98,16 +134,17 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 script {
-                    sh '''
-                        # Force single-architecture build
-                        DOCKER_BUILDKIT=1 docker build \
-                            --platform linux/amd64 \
-                            -t ${ECR_REPO}:${IMAGE_TAG} \
-                            lambda-image
-                        
-                        # Verify local image architecture
-                        docker inspect ${ECR_REPO}:${IMAGE_TAG} | grep Architecture
-                    '''
+                   sh '''
+                   set -e
+                   echo "\n>>> Conteúdo de lambda-image (contexto do build) - início >>>"
+                   ls -la lambda-image || true
+                   echo "\n>>> Listagem recursiva (mostra onde as classes e libs estão) >>>"
+                   ls -R lambda-image || true
+                   echo "\n>>> Conteúdo de lambda-image/lib (dependências) >>>"
+                   ls -la lambda-image/lib || echo 'lambda-image/lib não existe'
+                   echo "\n>>> Iniciando docker build... >>>"
+                   docker build -t ${ECR_REPO}:${IMAGE_TAG} lambda-image
+                   '''
                 }
             }
         }
@@ -130,7 +167,7 @@ pipeline {
             }
         }
 
-        stage('Inspect built image') {
+         stage('Inspect built image') {
             steps {
                 echo '🔎 Inspecting built Docker image (Cmd/Entrypoint/Env) and generated Dockerfile before push'
                 sh '''
@@ -231,7 +268,7 @@ JAVA
             }
         }
 
-        stage('Login to ECR') {
+         stage('Login to ECR') {
             steps {
                 withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
                     script {
@@ -247,112 +284,79 @@ JAVA
             }
         }
 
-        stage('Push Image to ECR') {
-    steps {
-        script {
-            sh '''
-            set -e
-            echo "🚀 Enviando imagem para ECR..."
-            
-            # Tag and push
-            docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
-            
-            # Forçar push com formato específico se necessário
-            docker push ${ECR_URI}:${IMAGE_TAG}
-            
-            echo "⏳ Aguardando propagação..."
-            sleep 20
-            
-            # Verificar manifest no registry
-            echo "🔍 Verificando formato no ECR..."
-            aws ecr batch-get-image \
-                --repository-name ${ECR_REPO} \
-                --image-ids imageTag=${IMAGE_TAG} \
-                --region ${AWS_REGION} \
-                --output json > ecr_manifest_check.json
-                
-            echo "--- ECR Manifest Check ---"
-            cat ecr_manifest_check.json
-            '''
+    stage('Push Image to ECR') {
+            steps {
+                script {
+                    sh '''
+                    docker tag ${ECR_REPO}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                    echo "⏳ Aguardando propagação da imagem no ECR..."
+                    sleep 15
+                    '''
+                }
+            }
         }
-    }
-}
 
      stage('Update Lambda with image digest and config') {
     steps {
         withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-            script {
-                echo '🔁 Obtendo digest e atualizando Lambda'
-                
-                // Método 1: Tentar obter digest diretamente
-                def digest = sh(
-                    returnStdout: true,
-                    script: """
-                        aws ecr describe-images \
-                            --repository-name ${ECR_REPO} \
-                            --image-ids imageTag=${IMAGE_TAG} \
-                            --region ${AWS_REGION} \
-                            --query 'imageDetails[0].imageDigest' \
-                            --output text
-                    """
-                ).trim()
+            script{
+                 echo '🔁 Obtendo digest da imagem no ECR e atualizando Lambda (imagem imutável + config)'
+                    def digest = sh(returnStdout: true, script: "aws ecr describe-images --repository-name ${ECR_REPO} --image-ids imageTag=${IMAGE_TAG} --region ${AWS_REGION} --query 'imageDetails[0].imageDigest' --output text").trim()
+                    echo "🔍 Digest encontrado: ${digest}"
+                    if (!digest || digest == 'None') {
+                        error(" Não foi possível obter o digest da imagem no ECR. Aborting.")
+                    }
+                    def imageWithDigest = "${ECR_URI}@${digest}"
+                    echo "🚀 Atualizando função Lambda ${LAMBDA_FUNCTION} para usar a imagem com digest: ${imageWithDigest}"
+                    env.IMAGE_DIGEST = digest
+                    env.IMAGE_WITH_DIGEST = imageWithDigest
+                    sh "aws lambda update-function-code --function-name ${LAMBDA_FUNCTION} --image-uri ${imageWithDigest} --region ${AWS_REGION}"
+                      echo "⚙️ Atualizando configuração da função: memória=${LAMBDA_MEMORY}MB timeout=${LAMBDA_TIMEOUT}s"
+                        sh "aws lambda update-function-configuration --function-name ${LAMBDA_FUNCTION} --memory-size ${LAMBDA_MEMORY} --timeout ${LAMBDA_TIMEOUT} --region ${AWS_REGION}"
+                                                echo "⚙️ Atualizando configuração da função: memória=${LAMBDA_MEMORY}MB timeout=${LAMBDA_TIMEOUT}s"
+                                                sh '''
+                                                set -e
 
-                // Método 2: Fallback - obter digest via docker manifest
-                if (!digest || digest == 'None') {
-                    echo "⚠️  Tentando método alternativo para obter digest..."
-                    digest = sh(
-                        returnStdout: true,
-                        script: """
-                            docker manifest inspect ${ECR_URI}:${IMAGE_TAG} | \
-                            grep -o '\"digest\": \"sha256:[a-f0-9]*\"' | \
-                            head -1 | \
-                            cut -d'"' -f4
-                        """
-                    ).trim()
-                }
+                                                MAX_WAIT=300
+                                                SLEEP=5
+                                                ELAPSED=0
+                                                echo "⏳ Waiting for update-function-code to finish (max ${MAX_WAIT}s)..."
+                                                while [ $ELAPSED -lt $MAX_WAIT ]; do
+                                                    status=$(aws lambda get-function-configuration --function-name ${LAMBDA_FUNCTION} --region ${AWS_REGION} --query 'LastUpdateStatus' --output text)
+                                                    echo "Lambda LastUpdateStatus=${status}"
+                                                    if [ "$status" != "InProgress" ]; then
+                                                        break
+                                                    fi
+                                                    sleep $SLEEP
+                                                    ELAPSED=$((ELAPSED + SLEEP))
+                                                done
 
-                if (!digest) {
-                    error("❌ Não foi possível obter o digest da imagem")
-                }
+                                                if [ $ELAPSED -ge $MAX_WAIT ]; then
+                                                    echo "❌ Timeout waiting for update-function-code to finish after ${MAX_WAIT}s"
+                                                    exit 1
+                                                fi
 
-                echo "🔍 Digest: ${digest}"
-                def imageWithDigest = "${ECR_URI}@${digest}"
-                
-                // Verificação rápida do tipo de manifest
-                sh """
-                    echo "🔎 Verificando tipo de manifest..."
-                    docker manifest inspect ${ECR_URI}:${IMAGE_TAG} > manifest_final.json 2>/dev/null || true
-                    
-                    if grep -q '"mediaType".*"manifest.list"' manifest_final.json; then
-                        echo "❌ ERRO: Imagem ainda é multi-arch"
-                        exit 1
-                    else
-                        echo "✅ Imagem é single-arch - prosseguindo..."
-                    fi
-                """
-
-                echo "🚀 Atualizando Lambda: ${LAMBDA_FUNCTION}"
-                sh """
-                    aws lambda update-function-code \
-                        --function-name ${LAMBDA_FUNCTION} \
-                        --image-uri ${imageWithDigest} \
-                        --region ${AWS_REGION}
-                """
-
-                echo "✅ Lambda atualizada com sucesso!"
-                
-                // Aguardar a atualização completar
-                sleep 10
-                
-                // Atualizar configurações
-                echo "⚙️ Aplicando configurações..."
-                sh """
-                    aws lambda update-function-configuration \
-                        --function-name ${LAMBDA_FUNCTION} \
-                        --memory-size ${LAMBDA_MEMORY} \
-                        --timeout ${LAMBDA_TIMEOUT} \
-                        --region ${AWS_REGION}
-                """
+                                                # retry update-function-configuration on conflict
+                                                RETRIES=5
+                                                for i in $(seq 1 $RETRIES); do
+                                                    echo "Attempt $i to update function configuration..."
+                                                    set +e
+                                                    aws lambda update-function-configuration --function-name ${LAMBDA_FUNCTION} --memory-size ${LAMBDA_MEMORY} --timeout ${LAMBDA_TIMEOUT} --region ${AWS_REGION}
+                                                    rc=$?
+                                                    set -e
+                                                    if [ $rc -eq 0 ]; then
+                                                        echo "✅ update-function-configuration succeeded"
+                                                        break
+                                                    fi
+                                                    echo "⚠️ update-function-configuration failed with rc=$rc; will retry after backoff"
+                                                    sleep $((i * 5))
+                                                    if [ $i -eq $RETRIES ]; then
+                                                        echo "❌ All retries failed"
+                                                        exit $rc
+                                                    fi
+                                                done
+                                                '''
             }
         }
     }
