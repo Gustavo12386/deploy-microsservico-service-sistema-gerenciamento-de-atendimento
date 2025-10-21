@@ -248,74 +248,37 @@ JAVA
         }
 
         stage('Push Image to ECR') {
-            steps {
-                script {
-                    sh '''
-                    # Tag and push the image to ECR
-                    docker tag ${ECR_REPO}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
-                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
-                    echo "⏳ Aguardando propagação da imagem no ECR..."
-                    sleep 15
-
-                    # Inspect the manifest in the registry and save to manifest.json for validation
-                    echo '--- docker manifest inspect (remote) ---'
-                    docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
-                    echo '--- manifest.json ---'
-                    cat manifest.json || true
-
-                    # Validate manifest: detect if it's a manifest list or OCI index (multi-arch)
-                    if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
-                        echo "\n❌ Detected a multi-arch/OCI index manifest. AWS Lambda requires a single-arch image manifest (application/vnd.docker.distribution.manifest.v2+json)."
-                        echo "Attempting an automatic rebuild (two attempts) with --platform linux/amd64 and re-push..."
-
-                        # Attempt 1: normal docker build with explicit platform
-                        echo "-> Rebuild attempt 1: docker build --platform linux/amd64"
-                        DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -t ${ECR_REPO}:${IMAGE_TAG} lambda-image || true
-                        docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
-                        docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
-                        echo "⏳ Aguardando propagação da imagem repush no ECR..."
-                        sleep 15
-
-                        # Re-inspect manifest
-                        docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
-                        echo '--- manifest.json after rebuild attempt 1 ---'
-                        cat manifest.json || true
-
-                        if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
-                            echo "-> Rebuild attempt 1 produced multi-arch manifest; trying buildx --load fallback"
-
-                            # Attempt 2: use buildx to build for linux/amd64 and --load into local daemon, then push
-                            echo "-> Ensuring a buildx builder exists and is active"
-                            docker buildx inspect default >/dev/null 2>&1 || docker buildx create --use --driver docker-container || true
-                            echo "-> Rebuild attempt 2: docker buildx build --platform linux/amd64 --load"
-                            docker buildx build --platform linux/amd64 --load -t ${ECR_REPO}:${IMAGE_TAG} lambda-image || true
-                            docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
-                            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
-                            echo "⏳ Aguardando propagação da imagem repush (buildx) no ECR..."
-                            sleep 15
-
-                            # Re-inspect manifest after buildx fallback
-                            docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
-                            echo '--- manifest.json after buildx fallback ---'
-                            cat manifest.json || true
-
-                            if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
-                                echo "\n❌ Automatic rebuilds (docker build and buildx --load) did not produce a single-arch manifest."
-                                echo "Remediation: build on an amd64 host (or ensure builder loads single-arch image) or use skopeo to convert the manifest/media types."
-                                exit 2
-                            else
-                                echo "✅ Auto-rebuild (buildx fallback) produced acceptable manifest. Proceeding."
-                            fi
-                        else
-                            echo "✅ Auto-rebuild produced acceptable manifest. Proceeding."
-                        fi
-                    fi
-                    '''
-                }
-            }
+    steps {
+        script {
+            sh '''
+            set -e
+            echo "🚀 Enviando imagem para ECR..."
+            
+            # Tag and push
+            docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
+            
+            # Forçar push com formato específico se necessário
+            docker push ${ECR_URI}:${IMAGE_TAG}
+            
+            echo "⏳ Aguardando propagação..."
+            sleep 20
+            
+            # Verificar manifest no registry
+            echo "🔍 Verificando formato no ECR..."
+            aws ecr batch-get-image \
+                --repository-name ${ECR_REPO} \
+                --image-ids imageTag=${IMAGE_TAG} \
+                --region ${AWS_REGION} \
+                --output json > ecr_manifest_check.json
+                
+            echo "--- ECR Manifest Check ---"
+            cat ecr_manifest_check.json
+            '''
         }
+    }
+}
 
-      stage('Update Lambda with image digest and config') {
+     stage('Update Lambda with image digest and config') {
     steps {
         withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
             script {
