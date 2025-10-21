@@ -294,9 +294,10 @@ JAVA
                     # Validate manifest: detect if it's a manifest list or OCI index (multi-arch)
                     if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
                         echo "\n❌ Detected a multi-arch/OCI index manifest. AWS Lambda requires a single-arch image manifest (application/vnd.docker.distribution.manifest.v2+json)."
-                        echo "Attempting an automatic rebuild (one attempt) with --platform linux/amd64 and re-push..."
+                        echo "Attempting an automatic rebuild (two attempts) with --platform linux/amd64 and re-push..."
 
-                        # Rebuild explicitly for linux/amd64 and repush
+                        # Attempt 1: normal docker build with explicit platform
+                        echo "-> Rebuild attempt 1: docker build --platform linux/amd64"
                         DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -t ${ECR_REPO}:${IMAGE_TAG} lambda-image || true
                         docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
                         docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
@@ -305,13 +306,34 @@ JAVA
 
                         # Re-inspect manifest
                         docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
-                        echo '--- manifest.json after auto-rebuild ---'
+                        echo '--- manifest.json after rebuild attempt 1 ---'
                         cat manifest.json || true
 
-                        # If still a manifest list / index, fail explicitly with a helpful message
                         if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
-                            echo "\n❌ Automatic rebuild did not produce a single-arch manifest. Please build on an amd64 host or ensure builder doesn't create multi-arch manifests."
-                            exit 2
+                            echo "-> Rebuild attempt 1 produced multi-arch manifest; trying buildx --load fallback"
+
+                            # Attempt 2: use buildx to build for linux/amd64 and --load into local daemon, then push
+                            echo "-> Ensuring a buildx builder exists and is active"
+                            docker buildx inspect default >/dev/null 2>&1 || docker buildx create --use --driver docker-container || true
+                            echo "-> Rebuild attempt 2: docker buildx build --platform linux/amd64 --load"
+                            docker buildx build --platform linux/amd64 --load -t ${ECR_REPO}:${IMAGE_TAG} lambda-image || true
+                            docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                            echo "⏳ Aguardando propagação da imagem repush (buildx) no ECR..."
+                            sleep 15
+
+                            # Re-inspect manifest after buildx fallback
+                            docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
+                            echo '--- manifest.json after buildx fallback ---'
+                            cat manifest.json || true
+
+                            if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
+                                echo "\n❌ Automatic rebuilds (docker build and buildx --load) did not produce a single-arch manifest."
+                                echo "Remediation: build on an amd64 host (or ensure builder loads single-arch image) or use skopeo to convert the manifest/media types."
+                                exit 2
+                            else
+                                echo "✅ Auto-rebuild (buildx fallback) produced acceptable manifest. Proceeding."
+                            fi
                         else
                             echo "✅ Auto-rebuild produced acceptable manifest. Proceeding."
                         fi
