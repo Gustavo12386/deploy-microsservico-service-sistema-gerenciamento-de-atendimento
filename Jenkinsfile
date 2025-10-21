@@ -71,45 +71,42 @@ pipeline {
                 # Copiar o JAR
                 cp "${JAR}" ${CONTEXT}/app.jar
                 
-                # Criar Dockerfile compatível com Lambda
-                cat > ${CONTEXT}/Dockerfile <<'EOF'
-        # Usar a imagem base oficial Lambda Java (formato Docker compatível)
-        FROM public.ecr.aws/lambda/java:21
-
-        # Definir variáveis de ambiente para forçar formato Docker
-        ENV DOCKER_BUILDKIT=0
-        ENV DOCKER_CONTENT_TRUST=0
-
-        # Copiar o JAR para o local padrão
-        COPY app.jar ${LAMBDA_TASK_ROOT}
-
-        # Definir o handler
-        CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]
-        EOF
-
-                echo "✅ Dockerfile criado com formato compatível"
+                # Criar Dockerfile usando echo (método mais confiável)
+                echo "# Imagem base Lambda Java" > ${CONTEXT}/Dockerfile
+                echo "FROM public.ecr.aws/lambda/java:21" >> ${CONTEXT}/Dockerfile
+                echo "" >> ${CONTEXT}/Dockerfile
+                echo "# Copiar o JAR" >> ${CONTEXT}/Dockerfile
+                echo "COPY app.jar \\${LAMBDA_TASK_ROOT}" >> ${CONTEXT}/Dockerfile
+                echo "" >> ${CONTEXT}/Dockerfile
+                echo "# Handler Lambda" >> ${CONTEXT}/Dockerfile
+                echo 'CMD ["com.service.config.handler.StreamLambdaHandler::handleRequest"]' >> ${CONTEXT}/Dockerfile
                 '''
             }
         }
 
-        stage('Build Docker Image (Lambda Compatible)') {
+        stage('Verify Dockerfile') {
+            steps {
+                sh '''
+                echo "🔍 Verificando contexto de build..."
+                ls -la lambda-image/
+                echo "--- Dockerfile ---"
+                cat lambda-image/Dockerfile
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
             steps {
                 script {
                     sh '''
-                    set -e
-                    echo "🔨 Construindo imagem compatível com AWS Lambda..."
-                    
-                    # Forçar formato Docker tradicional (não OCI)
-                    export DOCKER_BUILDKIT=0
-                    
-                    # Build com formato Docker legacy
-                    docker build \
-                        --platform linux/amd64 \
-                        --no-cache \
-                        -t ${ECR_REPO}:${IMAGE_TAG} \
-                        lambda-image
+                        # Force single-architecture build
+                        DOCKER_BUILDKIT=1 docker build \
+                            --platform linux/amd64 \
+                            -t ${ECR_REPO}:${IMAGE_TAG} \
+                            lambda-image
                         
-                    echo "✅ Imagem construída com formato Docker compatível"
+                        # Verify local image architecture
+                        docker inspect ${ECR_REPO}:${IMAGE_TAG} | grep Architecture
                     '''
                 }
             }
@@ -254,68 +251,149 @@ JAVA
             steps {
                 script {
                     sh '''
-                    set -e
-                    echo "🚀 Enviando imagem para ECR..."
-                    
-                    # Tag and push
-                    docker tag ${ECR_REPO}:${IMAGE_TAG} ${ECR_URI}:${IMAGE_TAG}
-                    
-                    # Forçar push com formato específico se necessário
-                    docker push ${ECR_URI}:${IMAGE_TAG}
-                    
-                    echo "⏳ Aguardando propagação..."
-                    sleep 20
-                    
-                    # Verificar manifest no registry
-                    echo "🔍 Verificando formato no ECR..."
-                    aws ecr batch-get-image \
-                        --repository-name ${ECR_REPO} \
-                        --image-ids imageTag=${IMAGE_TAG} \
-                        --region ${AWS_REGION} \
-                        --output json > ecr_manifest_check.json
-                        
-                    echo "--- ECR Manifest Check ---"
-                    cat ecr_manifest_check.json
+                    # Tag and push the image to ECR
+                    docker tag ${ECR_REPO}:latest ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                    docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest
+                    echo "⏳ Aguardando propagação da imagem no ECR..."
+                    sleep 15
+
+                    # Inspect the manifest in the registry and save to manifest.json for validation
+                    echo '--- docker manifest inspect (remote) ---'
+                    docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
+                    echo '--- manifest.json ---'
+                    cat manifest.json || true
+
+                    # Validate manifest: detect if it's a manifest list or OCI index (multi-arch)
+                    if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
+                        echo "\n❌ Detected a multi-arch/OCI index manifest. AWS Lambda requires a single-arch image manifest (application/vnd.docker.distribution.manifest.v2+json)."
+                        echo "Attempting an automatic rebuild (two attempts) with --platform linux/amd64 and re-push..."
+
+                        # Attempt 1: normal docker build with explicit platform
+                        echo "-> Rebuild attempt 1: docker build --platform linux/amd64"
+                        DOCKER_BUILDKIT=1 docker build --platform linux/amd64 -t ${ECR_REPO}:${IMAGE_TAG} lambda-image || true
+                        docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                        docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                        echo "⏳ Aguardando propagação da imagem repush no ECR..."
+                        sleep 15
+
+                        # Re-inspect manifest
+                        docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
+                        echo '--- manifest.json after rebuild attempt 1 ---'
+                        cat manifest.json || true
+
+                        if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
+                            echo "-> Rebuild attempt 1 produced multi-arch manifest; trying buildx --load fallback"
+
+                            # Attempt 2: use buildx to build for linux/amd64 and --load into local daemon, then push
+                            echo "-> Ensuring a buildx builder exists and is active"
+                            docker buildx inspect default >/dev/null 2>&1 || docker buildx create --use --driver docker-container || true
+                            echo "-> Rebuild attempt 2: docker buildx build --platform linux/amd64 --load"
+                            docker buildx build --platform linux/amd64 --load -t ${ECR_REPO}:${IMAGE_TAG} lambda-image || true
+                            docker tag ${ECR_REPO}:${IMAGE_TAG} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                            docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest || true
+                            echo "⏳ Aguardando propagação da imagem repush (buildx) no ECR..."
+                            sleep 15
+
+                            # Re-inspect manifest after buildx fallback
+                            docker manifest inspect ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:latest > manifest.json 2>/dev/null || true
+                            echo '--- manifest.json after buildx fallback ---'
+                            cat manifest.json || true
+
+                            if grep -Eq '"manifests"|manifest.list|oci.image.index' manifest.json; then
+                                echo "\n❌ Automatic rebuilds (docker build and buildx --load) did not produce a single-arch manifest."
+                                echo "Remediation: build on an amd64 host (or ensure builder loads single-arch image) or use skopeo to convert the manifest/media types."
+                                exit 2
+                            else
+                                echo "✅ Auto-rebuild (buildx fallback) produced acceptable manifest. Proceeding."
+                            fi
+                        else
+                            echo "✅ Auto-rebuild produced acceptable manifest. Proceeding."
+                        fi
+                    fi
                     '''
                 }
             }
         }
-     
-      stage('Update Lambda Function') {
-            steps {
-                withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
-                    script {
-                        echo '🔁 Atualizando função Lambda...'
-                        
-                        // Método direto - usar tag latest
-                        def imageUri = "${ECR_URI}:${IMAGE_TAG}"
-                        echo "🚀 Usando imagem: ${imageUri}"
-                        
-                        sh """
-                            aws lambda update-function-code \
-                                --function-name ${LAMBDA_FUNCTION} \
-                                --image-uri ${imageUri} \
-                                --region ${AWS_REGION}
+
+      stage('Update Lambda with image digest and config') {
+    steps {
+        withAWS(region: "${AWS_REGION}", credentials: 'aws-credentials') {
+            script {
+                echo '🔁 Obtendo digest e atualizando Lambda'
+                
+                // Método 1: Tentar obter digest diretamente
+                def digest = sh(
+                    returnStdout: true,
+                    script: """
+                        aws ecr describe-images \
+                            --repository-name ${ECR_REPO} \
+                            --image-ids imageTag=${IMAGE_TAG} \
+                            --region ${AWS_REGION} \
+                            --query 'imageDetails[0].imageDigest' \
+                            --output text
+                    """
+                ).trim()
+
+                // Método 2: Fallback - obter digest via docker manifest
+                if (!digest || digest == 'None') {
+                    echo "⚠️  Tentando método alternativo para obter digest..."
+                    digest = sh(
+                        returnStdout: true,
+                        script: """
+                            docker manifest inspect ${ECR_URI}:${IMAGE_TAG} | \
+                            grep -o '\"digest\": \"sha256:[a-f0-9]*\"' | \
+                            head -1 | \
+                            cut -d'"' -f4
                         """
-                        
-                        echo "✅ Código da Lambda atualizado!"
-                        
-                        // Aguardar e atualizar configuração
-                        sleep 15
-                        
-                        sh """
-                            aws lambda update-function-configuration \
-                                --function-name ${LAMBDA_FUNCTION} \
-                                --memory-size ${LAMBDA_MEMORY} \
-                                --timeout ${LAMBDA_TIMEOUT} \
-                                --region ${AWS_REGION}
-                        """
-                        
-                        echo "🎉 Deploy concluído com sucesso!"
-                    }
+                    ).trim()
                 }
+
+                if (!digest) {
+                    error("❌ Não foi possível obter o digest da imagem")
+                }
+
+                echo "🔍 Digest: ${digest}"
+                def imageWithDigest = "${ECR_URI}@${digest}"
+                
+                // Verificação rápida do tipo de manifest
+                sh """
+                    echo "🔎 Verificando tipo de manifest..."
+                    docker manifest inspect ${ECR_URI}:${IMAGE_TAG} > manifest_final.json 2>/dev/null || true
+                    
+                    if grep -q '"mediaType".*"manifest.list"' manifest_final.json; then
+                        echo "❌ ERRO: Imagem ainda é multi-arch"
+                        exit 1
+                    else
+                        echo "✅ Imagem é single-arch - prosseguindo..."
+                    fi
+                """
+
+                echo "🚀 Atualizando Lambda: ${LAMBDA_FUNCTION}"
+                sh """
+                    aws lambda update-function-code \
+                        --function-name ${LAMBDA_FUNCTION} \
+                        --image-uri ${imageWithDigest} \
+                        --region ${AWS_REGION}
+                """
+
+                echo "✅ Lambda atualizada com sucesso!"
+                
+                // Aguardar a atualização completar
+                sleep 10
+                
+                // Atualizar configurações
+                echo "⚙️ Aplicando configurações..."
+                sh """
+                    aws lambda update-function-configuration \
+                        --function-name ${LAMBDA_FUNCTION} \
+                        --memory-size ${LAMBDA_MEMORY} \
+                        --timeout ${LAMBDA_TIMEOUT} \
+                        --region ${AWS_REGION}
+                """
             }
         }
+    }
+}
         
     }
 
